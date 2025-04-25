@@ -1,3 +1,4 @@
+import { AppState } from 'react-native';
 import { Job, RawJob } from './models/Job';
 
 export const CANCEL = 'rn_job_queue_cancel';
@@ -37,10 +38,10 @@ export class Worker<P extends object> {
      */
     constructor(name: string, executer: (payload: P, id: string) => Promise<any>, options: WorkerOptions<P> = {}) {
         const {
-            onStart = (job: Job<P>) => {},
-            onSuccess = (job: Job<P>) => {},
-            onFailure = (job: Job<P>, error: Error) => {},
-            onCompletion = (job: Job<P>) => {},
+            onStart = (job: Job<P>) => { },
+            onSuccess = (job: Job<P>) => { },
+            onFailure = (job: Job<P>, error: Error) => { },
+            onCompletion = (job: Job<P>) => { },
             concurrency = 5,
         } = options;
 
@@ -78,7 +79,7 @@ export class Worker<P extends object> {
         const job = { ...rawJob, ...{ payload } };
         this.executionCount++;
         this.onStart(job);
-        if (timeout > 0) {
+        if (timeout > 0 && AppState.currentState === 'active') {
             return this.executeWithTimeout(job, timeout);
         } else {
             return this.executer(payload, job.id);

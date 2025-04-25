@@ -3,13 +3,16 @@ import { JobStore } from '../models/JobStore';
 
 export class JobStoreMock implements JobStore {
     jobs: RawJob[] = [];
-    constructor() {}
+    constructor() { }
 
     addJob(job: RawJob): Promise<void> {
         this.jobs.push(job);
         return new Promise((resolve) => resolve());
     }
     getJobs(): Promise<RawJob[]> {
+        return new Promise((resolve) => resolve(this.jobs));
+    }
+    getJobsWithDeleted(): Promise<RawJob[]> {
         return new Promise((resolve) => resolve(this.jobs));
     }
     getActiveMarkedJobs(): Promise<RawJob[]> {
@@ -27,6 +30,11 @@ export class JobStoreMock implements JobStore {
         const sorted = this.sortJobs(filtered);
         return new Promise((resolve) => resolve(sorted.slice(0, count)));
     }
+    getJobsForWorkerWithDeleted(name: string, count: number): Promise<RawJob[]> {
+        const filtered = this.jobs.filter((job) => job.workerName === name);
+        const sorted = this.sortJobs(filtered);
+        return new Promise((resolve) => resolve(sorted.slice(0, count)));
+    }
     updateJob(rawJob: RawJob): void {
         this.jobs = this.jobs.map((job) => {
             if (rawJob.id === job.id) {
@@ -36,6 +44,9 @@ export class JobStoreMock implements JobStore {
         });
     }
     removeJob(rawJob: RawJob): void {
+        this.jobs = this.jobs.filter((job) => job.id !== rawJob.id);
+    }
+    removeJobPermanently(rawJob: RawJob): void {
         this.jobs = this.jobs.filter((job) => job.id !== rawJob.id);
     }
     removeJobsByWorkerName(workerName: string): void {

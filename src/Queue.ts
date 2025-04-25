@@ -1,9 +1,12 @@
-import { NativeModules } from 'react-native';
+import { AppState, NativeModules, Platform } from 'react-native';
 
-import { FALSE, Job, RawJob } from './models/Job';
+import { FALSE, Job, RawJob, JobStatus } from './models/Job';
 import { JobStore } from './models/JobStore';
 import { Uuid } from './utils/Uuid';
 import { Worker, CANCEL } from './Worker';
+
+import EventEmitter from 'eventemitter3';
+
 
 /**
  * Options to configure the queue
@@ -61,6 +64,7 @@ export class Queue {
         return this.workers;
     }
     private static queueInstance: Queue | null;
+    private emitter: EventEmitter = new EventEmitter();
 
     private jobStore: JobStore;
     private workers: { [key: string]: Worker<any> };
@@ -88,31 +92,52 @@ export class Queue {
         this.activeJobCount = 0;
 
         this.updateInterval = 10;
-        this.onQueueFinish = (executedJobs: Array<Job<any>>) => {};
+        this.onQueueFinish = (executedJobs: Array<Job<any>>) => { };
         this.concurrency = -1;
     }
+
+    /**
+     * Subscribe to queue events.
+     */
+    public on(event: string, listener: (...args: any[]) => void): void {
+        this.emitter.on(event, listener);
+    }
+
+    /**
+     * Unsubscribe from queue events.
+     */
+    public off(event: string, listener: (...args: any[]) => void): void {
+        this.emitter.off(event, listener);
+    }
+
     /**
      * @returns a promise that resolves all jobs of jobStore
      */
     async getJobs() {
         return await this.jobStore.getJobs();
     }
+    async getJobsWithDeleted() {
+        return await this.jobStore.getJobsWithDeleted();
+    }
     /**
      * @param job the job to be deleted
      */
-    async removeJob(job: RawJob) {
-        return await this.jobStore.removeJob(job);
+    removeJob(job: RawJob) {
+        return this.jobStore.removeJob(job);
+    }
+    removeJobPermanent(job: RawJob) {
+        return this.jobStore.removeJobPermanently(job);
     }
     /**
      * @param job the job which should be requeued
      */
-    async requeueJob(job: RawJob) {
-        return await this.jobStore.updateJob({ ...job, failed: '' });
+    requeueJob(job: RawJob) {
+        return this.jobStore.updateJob({ ...job, failed: '' });
     }
 
     configure(options: QueueOptions) {
         const {
-            onQueueFinish = (executedJobs: Array<Job<any>>) => {},
+            onQueueFinish = (executedJobs: Array<Job<any>>) => { },
             updateInterval = 10,
             concurrency = -1,
         } = options;
@@ -129,6 +154,7 @@ export class Queue {
             throw new Error(`Worker "${worker.name}" already exists.`);
         }
         this.workers[worker.name] = worker;
+        this.emitter.emit('workerAdded', worker.name);
     }
 
     /**
@@ -137,7 +163,7 @@ export class Queue {
      * @param name
      * @param [deleteRelatedJobs=false] removes all queued jobs releated to the worker if set to true
      */
-    removeWorker(name: string, deleteRelatedJobs: boolean = false) {
+    removeWorker(name: string, deleteRelatedJobs = false) {
         delete this.workers[name];
         if (deleteRelatedJobs) {
             this.jobStore.removeJobsByWorkerName(name);
@@ -156,7 +182,7 @@ export class Queue {
         workerName: string,
         payload: P,
         options = { attempts: 0, timeout: 0, priority: 0 },
-        startQueue: boolean = true
+        startQueue = true
     ) {
         const { attempts = 0, timeout = 0, priority = 0 } = options;
         const id: string = Uuid.v4();
@@ -171,12 +197,15 @@ export class Queue {
             attempts,
             timeout,
             priority,
+            isDeleted: FALSE,
+            status: "idle"
         };
         if (!this.workers[job.workerName]) {
             throw new Error(`Missing worker with name ${job.workerName}`);
         }
 
         this.jobStore.addJob(job);
+        this.emitter.emit('jobAdded', job);
         if (startQueue && !this.isActive) {
             this.start();
         }
@@ -223,7 +252,11 @@ export class Queue {
         await Promise.all(resetTasks);
     }
     private scheduleQueue() {
-        this.timeoutId = setTimeout(this.runQueue, this.updateInterval);
+        if (AppState.currentState === 'active' && Platform.OS === "ios") {
+            this.timeoutId = setTimeout(this.runQueue, this.updateInterval);
+        } else {
+            this.runQueue();
+        }
     }
     private runQueue = async () => {
         if (!this.isActive) {
@@ -298,6 +331,15 @@ export class Queue {
         }
     }
 
+    async getJobsForWorkerWithDeleted(workerName: string) {
+        const { isBusy, availableExecuters } = this.workers[workerName];
+        if (!isBusy) {
+            return await this.jobStore.getJobsForWorkerWithDeleted(workerName, availableExecuters);
+        } else {
+            return await this.getJobsForAlternateWorker();
+        }
+    }
+
     private async getJobsForAlternateWorker() {
         for (const workerName of Object.keys(this.workers)) {
             const { isBusy, availableExecuters } = this.workers[workerName];
@@ -313,11 +355,14 @@ export class Queue {
     }
 
     private excuteJob = async (rawJob: RawJob) => {
+        this.emitter.emit('jobStarted', rawJob);
         const worker = this.workers[rawJob.workerName];
-        const payload = JSON.parse(rawJob.payload);
-        const job = { ...rawJob, ...{ payload } };
+        const payload = JSON.parse(rawJob.payload) as Worker<any>;
+        const job = { ...rawJob, ...{ payload } } as Job<any>;
 
         try {
+            this.jobStore.updateJob({ ...job, ...{ status: "processing" } });
+
             this.activeJobCount++;
             if (!this.workers[rawJob.workerName]) {
                 throw new Error(`Missing worker with name ${rawJob.workerName}`);
@@ -326,27 +371,30 @@ export class Queue {
 
             this.runningJobPromises[rawJob.id] = promise;
             await promise;
+            this.emitter.emit('jobSucceeded', job);
 
             worker.triggerSuccess(job);
-
+            this.jobStore.updateJob({ ...job, ...{ status: "finished" } });
             this.jobStore.removeJob(rawJob);
         } catch (err) {
             const error = err as Error;
             const { attempts } = rawJob;
-            // tslint:disable-next-line: prefer-const
-            let { errors, failedAttempts } = JSON.parse(rawJob.metaData);
+            // eslint-disable-next-line prefer-const
+            let { errors, failedAttempts } = JSON.parse(rawJob.metaData) as { errors: string[]; failedAttempts: number };
             failedAttempts++;
             let failed = '';
             if (failedAttempts >= attempts) {
                 failed = new Date().toISOString();
             }
             const metaData = JSON.stringify({ errors: [...errors, error], failedAttempts });
+            this.emitter.emit('jobFailed', rawJob, error);
             worker.triggerFailure({ ...job, metaData, failed }, error);
-            this.jobStore.updateJob({ ...rawJob, ...{ active: FALSE, metaData, failed } });
+            this.jobStore.updateJob({ ...rawJob, ...{ active: FALSE, metaData, failed, status: "failed" } });
         } finally {
             delete this.runningJobPromises[job.id];
             worker.decreaseExecutionCount();
             worker.triggerCompletion(job);
+            this.emitter.emit('jobCompleted', rawJob);
             this.executedJobs.push(rawJob);
             this.activeJobCount--;
         }

@@ -12,6 +12,8 @@ struct Job {
     var failed: NSString
     var timeout: Int32
     var priority: Int32
+    var isDeleted: Int32
+    var status: NSString
 }
 extension Job: SQLTable {
     static var createStatement: String {
@@ -26,7 +28,9 @@ extension Job: SQLTable {
         created CHAR(255),
         failed CHAR(255),
         timeout INTEGER NOT NULL,
-        priority Integer NOT NULL
+        priority Integer NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        status CHAR(255),
         );
         """
     }
@@ -40,7 +44,9 @@ extension Job: SQLTable {
                    created: job["created"] as! NSString,
                    failed: job["failed"] as! NSString,
                    timeout: job["timeout"] as! Int32,
-                   priority: job["priority"] as! Int32)
+                   priority: job["priority"] as! Int32,
+                   isDeleted: job["isDeleted"] as! Int32,
+                   status: job["status"] as! NSString)
     }
     func toDictionary()->[String:Any]{
         var jobAsDictionary=[String:Any]()
@@ -54,12 +60,14 @@ extension Job: SQLTable {
         jobAsDictionary["failed"]=self.failed
         jobAsDictionary["timeout"]=self.timeout
         jobAsDictionary["priority"]=self.priority
+        jobAsDictionary["isDeleted"] = self.isDeleted
+        jobAsDictionary["status"]=self.status
         return jobAsDictionary;
     }
 }
 extension SQLiteDatabase {
     func add(job: Job) throws {
-        let insertSql = "INSERT INTO job (id, worker_name, active, payload, meta_data, attempts, created, failed,timeout,priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
+        let insertSql = "INSERT INTO job (id, worker_name, active, payload, meta_data, attempts, created, failed, timeout, priority, is_deleted, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
         let insertStatement = try prepareStatement(sql: insertSql)
         defer {
             sqlite3_finalize(insertStatement)
@@ -74,7 +82,9 @@ extension SQLiteDatabase {
             sqlite3_bind_text(insertStatement, 7, job.created.utf8String, -1, nil) == SQLITE_OK &&
             sqlite3_bind_text(insertStatement, 8, job.failed.utf8String, -1, nil) == SQLITE_OK &&
             sqlite3_bind_int(insertStatement, 9, job.timeout) == SQLITE_OK &&
-            sqlite3_bind_int(insertStatement, 10, job.priority) == SQLITE_OK
+            sqlite3_bind_int(insertStatement, 10, job.priority) == SQLITE_OK &&
+            sqlite3_bind_int(insertStatement, 11, job.isDeleted) == SQLITE_OK &&
+            sqlite3_bind_text(insertStatement, 12, job.status.utf8String, -1, nil) == SQLITE_OK
             
             )else {
                 throw SQLiteError.Bind(message: errorMessage)
@@ -85,7 +95,7 @@ extension SQLiteDatabase {
         }
     }
     func getJobBy(id: NSString) -> Job? {
-        let querySql = "SELECT * FROM job WHERE id = ?;"
+        let querySql = "SELECT * FROM job WHERE id = ? AND is_deleted = 0;"
         guard let queryStatement = try? prepareStatement(sql: querySql) else {
             return nil
         }
@@ -106,7 +116,7 @@ extension SQLiteDatabase {
         return mapColumnsToJob(sqlStatement: queryStatement)
     }
     func getNextJob() -> Job? {
-        let querySql = "SELECT * FROM job WHERE active == 0 AND failed == '' ORDER BY priority DESC,datetime(created) LIMIT 1;"
+        let querySql = "SELECT * FROM job WHERE active == 0 AND failed == '' AND is_deleted = 0 ORDER BY priority DESC,datetime(created) LIMIT 1;"
         guard let queryStatement = try? prepareStatement(sql: querySql) else {
             return nil
         }
@@ -122,6 +132,29 @@ extension SQLiteDatabase {
         return mapColumnsToJob(sqlStatement: queryStatement)
     }
     func getJobsForWorker(name:NSString,count:Int32) -> [Job]? {
+        let querySql = "SELECT * FROM job WHERE active == 0 AND failed == '' AND worker_name == ? AND is_deleted = 0 ORDER BY priority DESC,datetime(created) LIMIT ?;"
+        guard let queryStatement = try? prepareStatement(sql: querySql) else {
+            return nil
+        }
+        defer {
+            sqlite3_finalize(queryStatement)
+        }
+        
+        guard (sqlite3_bind_text(queryStatement, 1, name.utf8String,-1,nil) == SQLITE_OK &&
+            sqlite3_bind_int(queryStatement, 2, count) == SQLITE_OK)else {
+                return nil
+        }
+        
+        var jobs = [Job]()
+        while(sqlite3_step(queryStatement) == SQLITE_ROW){
+            if let job=mapColumnsToJob(sqlStatement: queryStatement){
+                jobs.append(job)
+            }
+        }
+        
+        return jobs
+    }
+    func getJobsForWorkerWithDeleted(name:NSString,count:Int32) -> [Job]? {
         let querySql = "SELECT * FROM job WHERE active == 0 AND failed == '' AND worker_name == ? ORDER BY priority DESC,datetime(created) LIMIT ?;"
         guard let queryStatement = try? prepareStatement(sql: querySql) else {
             return nil
@@ -145,15 +178,25 @@ extension SQLiteDatabase {
         return jobs
     }
     func getJobs() -> [Job]? {
+        let querySql = "SELECT * FROM job WHERE is_deleted = 0 ORDER BY priority DESC,datetime(created);"
+        return getJobsByQuery(query: querySql)
+    }
+    func getJobsWithDeleted() -> [Job]? {
         let querySql = "SELECT * FROM job ORDER BY priority DESC,datetime(created);"
         return getJobsByQuery(query: querySql)
     }
     func getActiveMarkedJobs() -> [Job]? {
-        let querySql = "SELECT * FROM job WHERE active == 1;" 
+        let querySql = "SELECT * FROM job WHERE active == 1 AND is_deleted = 0;" 
         return getJobsByQuery(query: querySql)
     }
     func getJobsByQuery(query:String)->[Job]?{
-        guard let queryStatement = try? prepareStatement(sql: query) else {
+        let modifiedQuery: String
+        if query.lowercased().contains("where") {
+            modifiedQuery = query.replacingOccurrences(of: "where", with: "WHERE is_deleted = 0 AND", options: .caseInsensitive, range: nil)
+        } else {
+            modifiedQuery = query + " WHERE is_deleted = 0"
+        }
+        guard let queryStatement = try? prepareStatement(sql: modifiedQuery) else {
             return nil
         }
         defer {
@@ -169,8 +212,8 @@ extension SQLiteDatabase {
         
         return jobs
     }
-    
-    func delete(job: Job) throws{
+
+    func deletePermanently(job: Job) throws{
         let querySql = "DELETE FROM job WHERE id = ?;"
         guard let deleteStatement = try? prepareStatement(sql: querySql) else {
             throw SQLiteError.Prepare(message: errorMessage)
@@ -188,8 +231,27 @@ extension SQLiteDatabase {
             throw SQLiteError.Step(message: errorMessage)
         }
     }
+    
+    func delete(job: Job) throws{
+        let querySql = "UPDATE job SET is_deleted = 1 WHERE id = ?;"
+        guard let deleteStatement = try? prepareStatement(sql: querySql) else {
+            throw SQLiteError.Prepare(message: errorMessage)
+        }
+        
+        defer {
+            sqlite3_finalize(deleteStatement)
+        }
+        
+        guard sqlite3_bind_text(deleteStatement, 1, job.id.utf8String,-1,nil) == SQLITE_OK else {
+            throw SQLiteError.Bind(message: errorMessage)
+        }
+        
+        guard sqlite3_step(deleteStatement) == SQLITE_DONE else {
+            throw SQLiteError.Step(message: errorMessage)
+        }
+    }
     func deleteJobsByWorkerName(workerName: NSString) throws{
-        let querySql = "DELETE FROM job WHERE worker_name = ?;"
+        let querySql = "UPDATE job SET is_deleted = 1 WHERE worker_name = ?;"
         guard let deleteStatement = try? prepareStatement(sql: querySql) else {
             throw SQLiteError.Prepare(message: errorMessage)
         }
@@ -208,7 +270,7 @@ extension SQLiteDatabase {
     }
     
     func update(job: Job) throws{
-        let querySql = "UPDATE job SET active = ?, failed = ?, meta_data = ?, attempts = ? WHERE id = ?;"
+        let querySql = "UPDATE job SET active = ?, failed = ?, meta_data = ?, attempts = ?, status = ? WHERE id = ?;"
         guard let updateStatement = try? prepareStatement(sql: querySql) else {
             throw SQLiteError.Prepare(message: errorMessage)
         }
@@ -221,7 +283,8 @@ extension SQLiteDatabase {
             sqlite3_bind_text(updateStatement, 2, job.failed.utf8String, -1, nil) == SQLITE_OK &&
             sqlite3_bind_text(updateStatement, 3, job.metaData.utf8String, -1, nil) == SQLITE_OK &&
             sqlite3_bind_int(updateStatement, 4, job.attempts) == SQLITE_OK &&
-            sqlite3_bind_text(updateStatement, 5, job.id.utf8String,-1,nil) == SQLITE_OK
+            sqlite3_bind_text(updateStatement, 5, job.id.utf8String,-1,nil) == SQLITE_OK&&
+            sqlite3_bind_text(updateStatement, 6, job.status.utf8String, -1, nil)
             ) else {
                 throw SQLiteError.Bind(message: errorMessage)
         }
@@ -249,7 +312,10 @@ extension SQLiteDatabase {
             let failed = String(cString: failedColumnContent!) as NSString
             let timeout=sqlite3_column_int(sqlStatement, 8)
             let priority=sqlite3_column_int(sqlStatement, 9)
-            return Job(id: id, workerName: workerName,active:active,payload:payload,metaData: metaData,attempts: attempts,created: created,failed: failed,timeout: timeout,priority: priority)
+            let isDeleted = sqlite3_column_int(sqlStatement, 10)
+            let statusColumnContent = sqlite3_column_text(sqlStatement, 7)
+            let status = String(cString: statusColumnContent!) as NSString
+            return Job(id: id, workerName: workerName,active:active,payload:payload,metaData: metaData,attempts: attempts,created: created,failed: failed,timeout: timeout,priority: priority, isDeleted: isDeleted, status: status)
         }else{
             return nil
         }

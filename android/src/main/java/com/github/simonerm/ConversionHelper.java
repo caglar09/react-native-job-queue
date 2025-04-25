@@ -39,6 +39,8 @@ public class ConversionHelper {
         job.setPriority(jobAsMap.getInt("priority"));
         job.setCreated(jobAsMap.getString("created"));
         job.setFailed(jobAsMap.getString("failed"));
+        job.setIsDeleted(jobAsMap.hasKey("isDeleted") && jobAsMap.getBoolean("isDeleted"));
+        job.setStatus(jobAsMap.getString("status"));
         return job;
     }
     private static Bundle getJobAsBundle(Job job){
@@ -53,6 +55,8 @@ public class ConversionHelper {
         jobAsBundle.putInt("priority",job.getPriority());
         jobAsBundle.putString("created",job.getCreated());
         jobAsBundle.putString("failed",job.getFailed());
+        jobAsBundle.putBoolean("isDeleted", job.isDeleted());
+        jobAsBundle.putString("status",job.getStatus());
         return  jobAsBundle;
     }
 }

@@ -46,6 +46,16 @@ public class JobQueue:NSObject{
         }
     }
     @objc
+    public func removeJobPermanently(_ job:[String:Any]){
+        if(db != nil){
+            do{
+                try db?.deletePermanently(job: Job.createJobFromDictionary(job: job))
+            }catch{
+                print("Couln't remove job Job to Database: ",error)
+            }
+        }
+    }
+    @objc
     public func removeJobsByWorkerName(_ workerName:String){
         if(db != nil){
             do{
@@ -101,11 +111,49 @@ public class JobQueue:NSObject{
             
         }
     }
+    @objc
+    public func getJobsForWorkerWithDeleted(_ name:String, count:Int, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock){
+        if(db != nil){
+            if let jobs =  db?.getJobsForWorkerWithDeleted(name: name as NSString, count: Int32(count)){
+                var jobsAsDictionaryArray=[[String:Any]]()
+                for job in jobs{
+                    var job=job
+                    job.active = 1
+                    do{
+                        try db?.update(job: job)
+                        jobsAsDictionaryArray.append(job.toDictionary())
+                    }catch{
+                        print("Couln't update job Job to Database: ",error)
+                    }
+                    
+                }
+                resolve(jobsAsDictionaryArray)
+            }else{
+                resolve([[String:Any]]())
+            }
+            
+        }
+    }
     
     @objc
     public func getJobs(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock){
         if(db != nil){
             if let jobs =  db?.getJobs(){
+                var jobsAsDictionaryArray=[[String:Any]]()
+                for job in jobs{
+                    jobsAsDictionaryArray.append(job.toDictionary())
+                }
+                resolve(jobsAsDictionaryArray)
+            }else{
+                resolve([[String:Any]]())
+            }
+            
+        }
+    }
+    @objc
+    public func getJobsWithDeleted(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock){
+        if(db != nil){
+            if let jobs =  db?.getJobsWithDeleted(){
                 var jobsAsDictionaryArray=[[String:Any]]()
                 for job in jobs{
                     jobsAsDictionaryArray.append(job.toDictionary())

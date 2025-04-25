@@ -6,7 +6,7 @@
     "entities": [
       {
         "tableName": "job",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `worker_name` TEXT, `active` INTEGER NOT NULL, `payload` TEXT, `attempts` INTEGER NOT NULL, `created` TEXT, `success` INTEGER NOT NULL, `completed` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `worker_name` TEXT, `active` INTEGER NOT NULL, `payload` TEXT, `attempts` INTEGER NOT NULL, `created` TEXT, `success` INTEGER NOT NULL, `completed` INTEGER NOT NULL, `is_deleted` INTEGER NOT NULL DEFAULT 0, `created` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -55,6 +55,19 @@
             "columnName": "completed",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "isDeleted",
+            "columnName": "is_deleted",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": false
           }
         ],
         "primaryKey": {

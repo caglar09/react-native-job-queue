@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase;
 import androidx.room.migration.Migration;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 
-@Database(entities = {Job.class}, version = 1)
+@Database(entities = {Job.class}, version = 2)
 public abstract class JobDatabase extends RoomDatabase {
 
     private static JobDatabase INSTANCE;
@@ -42,7 +42,10 @@ public abstract class JobDatabase extends RoomDatabase {
                     "created CHAR(255)," +
                     "failed CHAR(255)," +
                     "timeout INTEGER NOT NULL," +
-                    "priority Integer NOT NULL );");
+                    "priority Integer NOT NULL," +
+                    "is_deleted INTEGER NOT NULL DEFAULT 0," +
+                    "status CHAR(255)" +
+                    );");
         }
     };
 }

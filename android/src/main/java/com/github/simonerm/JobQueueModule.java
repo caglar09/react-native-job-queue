@@ -40,6 +40,12 @@ public class JobQueueModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void removeJob(ReadableMap job) {
         JobDao dao = JobDatabase.getAppDatabase(this.reactContext).jobDao();
+        dao.softDeleteJob(ConversionHelper.getJobFromReadableMap(job).getId());
+    }
+
+    @ReactMethod
+    public void removeJobPermanently(ReadableMap job) {
+        JobDao dao = JobDatabase.getAppDatabase(this.reactContext).jobDao();
         dao.delete(ConversionHelper.getJobFromReadableMap(job));
     }
 
@@ -63,6 +69,13 @@ public class JobQueueModule extends ReactContextBaseJavaModule {
         List<Job> jobs=dao.getJobs();
         promise.resolve(ConversionHelper.getJobsAsWritableArray(jobs));
     }
+    @ReactMethod
+    public void getJobsWithDeleted(Promise promise) {
+        JobDao dao = JobDatabase.getAppDatabase(this.reactContext).jobDao();
+
+        List<Job> jobs=dao.getJobsWithDeleted();
+        promise.resolve(ConversionHelper.getJobsAsWritableArray(jobs));
+    }
     
     @ReactMethod
     public void getActiveMarkedJobs(Promise promise) {
@@ -77,6 +90,19 @@ public class JobQueueModule extends ReactContextBaseJavaModule {
         JobDao dao = JobDatabase.getAppDatabase(this.reactContext).jobDao();
 
         List<Job> jobsToExecute=dao.getJobsForWorker(workerName,limit);
+        Iterator<Job>jobIterator=jobsToExecute.iterator();
+        while(jobIterator.hasNext()){
+            Job job = jobIterator.next();
+            job.setActive(1);
+            dao.update(job);
+        }
+        promise.resolve(ConversionHelper.getJobsAsWritableArray(jobsToExecute));
+    }
+    @ReactMethod
+    public void getJobsForWorkerWithDeleted(String workerName,int limit,Promise promise){
+        JobDao dao = JobDatabase.getAppDatabase(this.reactContext).jobDao();
+
+        List<Job> jobsToExecute=dao.getJobsForWorkerWithDeleted(workerName,limit);
         Iterator<Job>jobIterator=jobsToExecute.iterator();
         while(jobIterator.hasNext()){
             Job job = jobIterator.next();

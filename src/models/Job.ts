@@ -1,3 +1,5 @@
+export type JobStatus = "idle" | "processing" | "finished" | "failed"
+
 /**
  * represents Job model with Generics
  * @typeparam P payload type
@@ -10,9 +12,11 @@ export interface Job<P extends object> {
     metaData: string;
     attempts: number;
     created: string;
+    status: JobStatus;
     failed: string;
     timeout: number;
     priority: number;
+    isDeleted: Bool;
 }
 /**
  * represents native Job model
@@ -25,10 +29,13 @@ export interface RawJob {
     metaData: string;
     attempts: number;
     created: string;
+    status: JobStatus;
     failed: string;
     timeout: number;
     priority: number;
+    isDeleted: Bool;
 }
+
 /**
  * used to map booleans to integer since Sqlite doesn't support boolean
  */

@@ -33,6 +33,11 @@ public class Job {
 
     private String failed;
 
+    private String status;
+
+    @ColumnInfo(name = "is_deleted")
+    private boolean isDeleted;
+
     public String getId() {
         return id;
     }
@@ -111,5 +116,20 @@ public class Job {
 
     public void setMetaData(String metaData) {
         this.metaData = metaData;
+    }
+    public boolean isDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(boolean isDeleted) {
+        this.isDeleted = isDeleted;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }
