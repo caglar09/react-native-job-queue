@@ -1,4 +1,4 @@
-name: Build, Set Version, Tag and Create Release
+name: Build, Set Version and Create Release
 
 on:
     push:
@@ -32,6 +32,12 @@ jobs:
                   echo "VERSION=$VERSION" >> $GITHUB_ENV
                   echo "Version extracted without v: $VERSION"
 
+            - name: Install dependencies
+              run: npm install
+
+            - name: Run prepare script
+              run: npm run prepare
+
             - name: Check and update package.json version
               run: |
                   CURRENT_VERSION=$(node -p "require('./package.json').version")
@@ -51,8 +57,8 @@ jobs:
             - name: Push updated package.json and create tag
               run: |
                   git push origin HEAD
-                  git tag v${VERSION}         # <- TAG oluşturuluyor
-                  git push origin v${VERSION} # <- TAG push ediliyor
+                  git tag v${VERSION}
+                  git push origin v${VERSION}
 
             - name: Generate release notes from commit messages
               id: release_notes
