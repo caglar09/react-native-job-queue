@@ -1,0 +1,87 @@
+name: Build, Set Version, Tag and Create Release
+
+on:
+    push:
+        branches:
+            - 'release/v*' # Sadece release/v... branch'larında çalışır
+
+jobs:
+    build-and-release:
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: write
+            packages: write
+            pull-requests: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+
+            - name: Extract version (remove "v")
+              id: extract_version
+              run: |
+                  echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+                  RAW_VERSION=${GITHUB_REF#refs/heads/release/}
+                  VERSION=${RAW_VERSION#v}
+                  echo "VERSION=$VERSION" >> $GITHUB_ENV
+                  echo "Version extracted without v: $VERSION"
+
+            - name: Check and update package.json version
+              run: |
+                  CURRENT_VERSION=$(node -p "require('./package.json').version")
+                  echo "Current version: $CURRENT_VERSION"
+                  echo "Target version: $VERSION"
+                  if [ "$CURRENT_VERSION" != "$VERSION" ]; then
+                    echo "Updating version..."
+                    npm version --no-git-tag-version $VERSION
+                    git config user.name "github-actions"
+                    git config user.email "github-actions@github.com"
+                    git commit -am "ci: update version to $VERSION [skip ci]"
+                  else
+                    echo "Version already correct, no update needed."
+                  fi
+                  cat package.json
+
+            - name: Push updated package.json and create tag
+              run: |
+                  git push origin HEAD
+                  git tag v${VERSION}         # <- TAG oluşturuluyor
+                  git push origin v${VERSION} # <- TAG push ediliyor
+
+            - name: Generate release notes from commit messages
+              id: release_notes
+              run: |
+                  PREV_TAG=$(git describe --tags --abbrev=0 || echo "")
+                  if [ -n "$PREV_TAG" ]; then
+                    RELEASE_NOTES=$(git log --pretty=format:"- %s" $PREV_TAG..HEAD)
+                  else
+                    RELEASE_NOTES=$(git log --pretty=format:"- %s")
+                  fi
+                  echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+                  echo "$RELEASE_NOTES" >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v1
+              with:
+                  tag_name: v${{ env.VERSION }}
+                  name: Release v${{ env.VERSION }}
+                  body: ${{ env.RELEASE_NOTES }}
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create Pull Request to master
+              uses: peter-evans/create-pull-request@v5
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  commit-message: 'ci: merge release v${{ env.VERSION }} to master'
+                  title: 'Release v${{ env.VERSION }}'
+                  body: 'Automated pull request to merge release branch to master'
+                  base: master
+                  branch: ${{ env.BRANCH_NAME }}
