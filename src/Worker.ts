@@ -12,7 +12,7 @@ export interface WorkerOptions<P extends object> {
 }
 
 export interface CancellablePromise<T> extends Promise<T> {
-    rn_job_queue_cancel?: () => void;
+    rn_job_queue_cancel?: (error?: Error) => void;
 }
 /**
  * @typeparam P specifies the Type of the Job-Payload.

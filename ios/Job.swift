@@ -30,7 +30,7 @@ extension Job: SQLTable {
         timeout INTEGER NOT NULL,
         priority Integer NOT NULL,
         is_deleted INTEGER NOT NULL DEFAULT 0,
-        status CHAR(255),
+        status CHAR(255)
         );
         """
     }
@@ -60,7 +60,7 @@ extension Job: SQLTable {
         jobAsDictionary["failed"]=self.failed
         jobAsDictionary["timeout"]=self.timeout
         jobAsDictionary["priority"]=self.priority
-        jobAsDictionary["isDeleted"] = self.isDeleted
+        jobAsDictionary["isDeleted"]=self.isDeleted
         jobAsDictionary["status"]=self.status
         return jobAsDictionary;
     }
@@ -280,13 +280,13 @@ extension SQLiteDatabase {
         }
         
         guard (sqlite3_bind_int(updateStatement, 1,job.active) == SQLITE_OK &&
-            sqlite3_bind_text(updateStatement, 2, job.failed.utf8String, -1, nil) == SQLITE_OK &&
-            sqlite3_bind_text(updateStatement, 3, job.metaData.utf8String, -1, nil) == SQLITE_OK &&
-            sqlite3_bind_int(updateStatement, 4, job.attempts) == SQLITE_OK &&
-            sqlite3_bind_text(updateStatement, 5, job.id.utf8String,-1,nil) == SQLITE_OK&&
-            sqlite3_bind_text(updateStatement, 6, job.status.utf8String, -1, nil)
-            ) else {
-                throw SQLiteError.Bind(message: errorMessage)
+                    sqlite3_bind_text(updateStatement, 2, job.failed.utf8String, -1, nil) == SQLITE_OK &&
+                    sqlite3_bind_text(updateStatement, 3, job.metaData.utf8String, -1, nil) == SQLITE_OK &&
+                    sqlite3_bind_int(updateStatement, 4, job.attempts) == SQLITE_OK &&
+                    sqlite3_bind_text(updateStatement, 5, job.status.utf8String, -1, nil) == SQLITE_OK &&
+                    sqlite3_bind_text(updateStatement, 6, job.id.utf8String,-1, nil) == SQLITE_OK
+                    ) else {
+                        throw SQLiteError.Bind(message: errorMessage)
         }
         guard sqlite3_step(updateStatement) == SQLITE_DONE else {
             throw SQLiteError.Step(message: errorMessage)
@@ -313,7 +313,7 @@ extension SQLiteDatabase {
             let timeout=sqlite3_column_int(sqlStatement, 8)
             let priority=sqlite3_column_int(sqlStatement, 9)
             let isDeleted = sqlite3_column_int(sqlStatement, 10)
-            let statusColumnContent = sqlite3_column_text(sqlStatement, 7)
+            let statusColumnContent = sqlite3_column_text(sqlStatement, 11)
             let status = String(cString: statusColumnContent!) as NSString
             return Job(id: id, workerName: workerName,active:active,payload:payload,metaData: metaData,attempts: attempts,created: created,failed: failed,timeout: timeout,priority: priority, isDeleted: isDeleted, status: status)
         }else{

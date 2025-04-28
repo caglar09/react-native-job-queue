@@ -3,9 +3,52 @@ import { AppState, NativeModules, Platform } from 'react-native';
 import { FALSE, Job, RawJob, JobStatus } from './models/Job';
 import { JobStore } from './models/JobStore';
 import { Uuid } from './utils/Uuid';
-import { Worker, CANCEL } from './Worker';
+import { Worker, CANCEL, CancellablePromise } from './Worker';
+
 
 import EventEmitter from 'eventemitter3';
+
+/**
+ * Events emitted by the Queue.
+ */
+export interface QueueEvents {
+    /**
+     * Fired when a worker is added.
+     * @param workerName Name of the worker.
+     */
+    workerAdded: (workerName: string) => void;
+
+    /**
+     * Fired when a job is added to the queue.
+     * @param job The RawJob that was added.
+     */
+    jobAdded: (job: RawJob) => void;
+
+    /**
+     * Fired when a job starts processing.
+     * @param job The RawJob that started.
+     */
+    jobStarted: (job: RawJob) => void;
+
+    /**
+     * Fired when a job completes successfully.
+     * @param job The Job with payload that succeeded.
+     */
+    jobSucceeded: (job: Job<any>) => void;
+
+    /**
+     * Fired when a job fails.
+     * @param job The RawJob that failed.
+     * @param error The error thrown.
+     */
+    jobFailed: (job: RawJob, error: Error) => void;
+
+    /**
+     * Fired when a job completes (regardless of success or failure).
+     * @param job The RawJob that finished.
+     */
+    jobCompleted: (job: RawJob) => void;
+}
 
 
 /**
@@ -64,7 +107,7 @@ export class Queue {
         return this.workers;
     }
     private static queueInstance: Queue | null;
-    private emitter: EventEmitter = new EventEmitter();
+    private emitter: EventEmitter<QueueEvents> = new EventEmitter<QueueEvents>();
 
     private jobStore: JobStore;
     private workers: { [key: string]: Worker<any> };
@@ -79,7 +122,7 @@ export class Queue {
     private onQueueFinish: (executedJobs: Array<Job<any>>) => void;
 
     private queuedJobExecuter: any[] = [];
-    private runningJobPromises: { [key: string]: any };
+    private runningJobPromises: { [key: string]: CancellablePromise<any> };
 
     private constructor() {
         this.jobStore = NativeModules.JobQueue;
@@ -99,15 +142,15 @@ export class Queue {
     /**
      * Subscribe to queue events.
      */
-    public on(event: string, listener: (...args: any[]) => void): void {
-        this.emitter.on(event, listener);
+    public on<K extends keyof QueueEvents>(event: K, listener: QueueEvents[K]): void {
+        this.emitter.on(event, listener as any);
     }
 
     /**
      * Unsubscribe from queue events.
      */
-    public off(event: string, listener: (...args: any[]) => void): void {
-        this.emitter.off(event, listener);
+    public off<K extends keyof QueueEvents>(event: K, listener: QueueEvents[K]): void {
+        this.emitter.off(event, listener as any);
     }
 
     /**
@@ -235,7 +278,7 @@ export class Queue {
      */
     cancelJob(jobId: string, exception?: Error) {
         const promise = this.runningJobPromises[jobId];
-        if (promise && typeof promise[CANCEL] === 'function') {
+        if (promise !== undefined && typeof promise[CANCEL] === 'function') {
             promise[CANCEL](exception || new Error(`canceled`));
         } else if (!promise[CANCEL]) {
             console.warn('Worker does not have a cancel method implemented');
@@ -243,7 +286,7 @@ export class Queue {
             throw new Error(`Job with id ${jobId} not currently running`);
         }
     }
-    private resetActiveJob = async (job: RawJob) => {
+    private resetActiveJob = (job: RawJob) => {
         this.jobStore.updateJob({ ...job, ...{ active: FALSE } });
     };
     private async resetActiveJobs() {
@@ -355,13 +398,14 @@ export class Queue {
     }
 
     private excuteJob = async (rawJob: RawJob) => {
-        this.emitter.emit('jobStarted', rawJob);
         const worker = this.workers[rawJob.workerName];
         const payload = JSON.parse(rawJob.payload) as Worker<any>;
         const job = { ...rawJob, ...{ payload } } as Job<any>;
 
         try {
-            this.jobStore.updateJob({ ...job, ...{ status: "processing" } });
+            job.status = "processing";
+            this.jobStore.updateJob({ ...job, payload: JSON.stringify(payload) });
+            this.emitter.emit('jobStarted', job);
 
             this.activeJobCount++;
             if (!this.workers[rawJob.workerName]) {
@@ -371,11 +415,12 @@ export class Queue {
 
             this.runningJobPromises[rawJob.id] = promise;
             await promise;
-            this.emitter.emit('jobSucceeded', job);
 
             worker.triggerSuccess(job);
-            this.jobStore.updateJob({ ...job, ...{ status: "finished" } });
+            job.status = "finished";
+            this.jobStore.updateJob({ ...job, payload: JSON.stringify(payload) });
             this.jobStore.removeJob(rawJob);
+            this.emitter.emit('jobSucceeded', job);
         } catch (err) {
             const error = err as Error;
             const { attempts } = rawJob;
@@ -387,14 +432,15 @@ export class Queue {
                 failed = new Date().toISOString();
             }
             const metaData = JSON.stringify({ errors: [...errors, error], failedAttempts });
-            this.emitter.emit('jobFailed', rawJob, error);
             worker.triggerFailure({ ...job, metaData, failed }, error);
-            this.jobStore.updateJob({ ...rawJob, ...{ active: FALSE, metaData, failed, status: "failed" } });
+            const failedJob = { ...rawJob, ...{ active: FALSE, metaData, failed, status: "failed" } } as RawJob;
+            this.jobStore.updateJob(failedJob);
+            this.emitter.emit('jobFailed', failedJob, error);
         } finally {
             delete this.runningJobPromises[job.id];
             worker.decreaseExecutionCount();
             worker.triggerCompletion(job);
-            this.emitter.emit('jobCompleted', rawJob);
+            this.emitter.emit('jobCompleted', { ...job });
             this.executedJobs.push(rawJob);
             this.activeJobCount--;
         }

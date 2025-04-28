@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import queue from '../Queue';
 import { RawJob } from '../models/Job';
+import { Job } from '../models/Job';
 
 export interface UseQueueState {
     queuedCount: number;
@@ -10,6 +11,7 @@ export interface UseQueueState {
     completedCount: number;
     activeJobs: RawJob[];
     lastCompletedJobs: RawJob[];
+    refreshJobs: () => void;
 }
 
 /**
@@ -52,32 +54,28 @@ export function useQueue(): UseQueueState {
             setActiveJobs((prev) => [...prev, job]);
         };
         const onJobStarted = (job: RawJob) => {
-            setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, status: 'processing' } : j)));
-        };
-        const onJobCompleted = (job: RawJob) => {
-            setActiveJobs((prev) => prev.filter((j) => j.id !== job.id));
-            setLastCompletedJobs((prev) => [...prev, { ...job, status: 'finished' }]);
+            setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, ...job } : j)));
         };
         const onJobFailed = (job: RawJob) => {
-            setActiveJobs((prev) =>
-                prev.map((j) =>
-                    j.id === job.id ? { ...j, status: 'failed', metaData: job.metaData, failed: job.failed } : j
-                )
-            );
+            setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, ...job } : j)));
+        };
+        const onJobSucceeded = (job: Job<any>) => {
+            setActiveJobs((prev) => prev.filter((j) => j.id !== job.id));
+            setLastCompletedJobs((prev) => [...prev, { ...job }]);
         };
 
         // Subscribe
         queue.on('jobAdded', onJobAdded);
         queue.on('jobStarted', onJobStarted);
-        queue.on('jobCompleted', onJobCompleted);
         queue.on('jobFailed', onJobFailed);
+        queue.on('jobSucceeded', onJobSucceeded);
 
         // Cleanup
         return () => {
             queue.off('jobAdded', onJobAdded);
             queue.off('jobStarted', onJobStarted);
-            queue.off('jobCompleted', onJobCompleted);
             queue.off('jobFailed', onJobFailed);
+            queue.off('jobSucceeded', onJobSucceeded);
         };
     }, [refreshJobs]);
 
@@ -88,5 +86,6 @@ export function useQueue(): UseQueueState {
         completedCount,
         activeJobs,
         lastCompletedJobs,
+        refreshJobs,
     };
 }
