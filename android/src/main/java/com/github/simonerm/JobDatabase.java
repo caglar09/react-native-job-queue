@@ -32,7 +32,7 @@ public abstract class JobDatabase extends RoomDatabase {
     static final Migration MIGRATION_1_2 = new Migration(1, 2) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
-            database.execSQL(" CREATE TABLE IF NOT EXISTS job(" +
+            database.execSQL("CREATE TABLE IF NOT EXISTS job(" +
                     "id CHAR(36) PRIMARY KEY NOT NULL," +
                     "worker_name CHAR(255) NOT NULL," +
                     "active INTEGER NOT NULL," +
@@ -45,7 +45,7 @@ public abstract class JobDatabase extends RoomDatabase {
                     "priority Integer NOT NULL," +
                     "is_deleted INTEGER NOT NULL DEFAULT 0," +
                     "status CHAR(255)" +
-                    );");
+                    ")"); // Removed the extra semicolon and parenthesis
         }
     };
 }
