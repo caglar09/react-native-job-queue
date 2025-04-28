@@ -33,10 +33,10 @@ jobs:
                   echo "Version extracted without v: $VERSION"
 
             - name: Install dependencies
-              run: npm install
+              run: yarn
 
             - name: Run prepare script
-              run: npm run prepare
+              run: yarn prepare
 
             - name: Check and update package.json version
               run: |
