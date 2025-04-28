@@ -365,7 +365,7 @@ export class Queue {
         clearTimeout(this.timeoutId);
     }
 
-    private async getJobsForWorker(workerName: string) {
+    async getJobsForWorker(workerName: string) {
         const { isBusy, availableExecuters } = this.workers[workerName];
         if (!isBusy) {
             return await this.jobStore.getJobsForWorker(workerName, availableExecuters);
