@@ -72,6 +72,9 @@ jobs:
                   echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
                   echo "$RELEASE_NOTES" >> $GITHUB_ENV
                   echo "EOF" >> $GITHUB_ENV
+            - name: Archive build output
+              run: |
+                  zip -r release.zip lib package.json README.md LICENSE
 
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v1
@@ -79,6 +82,7 @@ jobs:
                   tag_name: v${{ env.VERSION }}
                   name: Release v${{ env.VERSION }}
                   body: ${{ env.RELEASE_NOTES }}
+                  files: release.zip
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
