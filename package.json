@@ -7,6 +7,13 @@
     "types": "lib/typescript/src",
     "main": "lib/commonjs/index.js",
     "module": "lib/module/index.js",
+    "files": [
+        "lib/commonjs",
+        "lib/module",
+        "lib/typescript",
+        "src",
+        "index.js"
+    ],
     "scripts": {
         "start": "react-native start",
         "validate:eslint": "eslint \"src/**/*.{js,ts,tsx}\" \"example/**/*.{js,ts,tsx}\"",

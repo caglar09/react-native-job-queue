@@ -1,9 +1,9 @@
-name: Build, Set Version and Create Release
+name: Build and Release React Native Library (bob)
 
 on:
     push:
         branches:
-            - 'release/v*' # Sadece release/v... branch'larında çalışır
+            - 'release/v*' # Yalnızca release/v... branch'lerinde çalışır
 
 jobs:
     build-and-release:
@@ -15,53 +15,72 @@ jobs:
             pull-requests: write
 
         steps:
-            # Kaynak kodu checkout et
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            # Node.js ortamını kur (v20)
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
                   node-version: '20'
 
-            # Branch adından versiyon numarasını çıkar (v1.2.3 → 1.2.3)
-            - name: Extract version (remove "v")
+            - name: Extract version from branch name
               id: extract_version
               run: |
-                  echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
-                  RAW_VERSION=${GITHUB_REF#refs/heads/release/}
-                  VERSION=${RAW_VERSION#v}
+                  RAW_VERSION="${GITHUB_REF#refs/heads/release/}"
+                  VERSION="${RAW_VERSION#v}"
                   echo "VERSION=$VERSION" >> $GITHUB_ENV
-                  echo "Version extracted without v: $VERSION"
+                  echo "BRANCH_NAME=release/v$VERSION" >> $GITHUB_ENV
 
-            # package.json içindeki versiyonu kontrol et ve gerekiyorsa güncelle
-            - name: Check and update package.json version
+            - name: Set git identity
+              run: |
+                  git config user.name "github-actions"
+                  git config user.email "github-actions@github.com"
+
+            - name: Update version in package.json if needed
               run: |
                   CURRENT_VERSION=$(node -p "require('./package.json').version")
                   echo "Current version: $CURRENT_VERSION"
-                  echo "Target version: $VERSION"
                   if [ "$CURRENT_VERSION" != "$VERSION" ]; then
-                    echo "Updating package.json version..."
+                    echo "Updating package.json version to $VERSION"
                     jq ".version = \"$VERSION\"" package.json > package.tmp.json && mv package.tmp.json package.json
-                    git config user.name "github-actions"
-                    git config user.email "github-actions@github.com"
                     git add package.json
                     git commit -m "ci: update version to $VERSION [skip ci]"
+                    git push origin HEAD
                   else
-                    echo "Version already correct. No update needed."
+                    echo "Version already matches. No update needed."
                   fi
 
-            # Bağımlılıkları yükle
             - name: Install dependencies
               run: yarn
 
-            # `prepare` scriptini çalıştır (örneğin bob build), lib klasörünü oluşturur
-            - name: Run prepare script
+            - name: Build library with bob (prepare script)
               run: npm run prepare
 
-            # Son release'den bu yana yapılan commit mesajlarını release notlarına dönüştür
-            - name: Generate release notes from commit messages
+            - name: Check builder-bob output folders
+              run: |
+                  for dir in lib/commonjs lib/module lib/typescript; do
+                    if [ ! -d "$dir" ]; then
+                      echo "❌ Missing directory: $dir"
+                      exit 1
+                    fi
+                  done
+                  echo "✅ All output folders exist."
+
+            - name: Ensure correct 'files' in package.json
+              run: |
+                  grep '"files"' package.json > /dev/null || {
+                    echo "❌ 'files' field missing in package.json. Add the following:"
+                    echo '  "files": [ "lib/commonjs", "lib/module", "lib/typescript", "src", "index.js" ]'
+                    exit 1
+                  }
+                  echo "✅ 'files' field exists."
+
+            - name: Pack the module
+              run: |
+                  PACKAGE_FILE=$(yarn pack --filename package.tgz | tail -n 1 | awk '{print $NF}')
+                  echo "PACKAGE_FILE=$PACKAGE_FILE" >> $GITHUB_ENV
+
+            - name: Generate release notes
               id: release_notes
               run: |
                   PREV_TAG=$(git describe --tags --abbrev=0 || echo "")
@@ -74,37 +93,27 @@ jobs:
                   echo "$RELEASE_NOTES" >> $GITHUB_ENV
                   echo "EOF" >> $GITHUB_ENV
 
-            # lib klasörü ve metadata dosyalarıyla release.zip arşivini oluştur
-            # - name: Archive lib folder and metadata into release.zip
-            #   run: |
-            #       mkdir -p dist
-            #       cp -r lib dist/
-            #       cp package.json README.md LICENSE dist/ || true
-            #       cd dist && zip -r ../release.zip . && cd ..
-
-            # GitHub release oluştur ve release.zip dosyasını ekle
-            - name: Create GitHub Release with asset
+            - name: Create GitHub Release with .tgz package
               uses: softprops/action-gh-release@v1
               with:
                   tag_name: v${{ env.VERSION }}
                   name: Release v${{ env.VERSION }}
                   body: ${{ env.RELEASE_NOTES }}
-                  # files: release.zip
+                  files: ${{ env.PACKAGE_FILE }}
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            # package.json güncellemesini pushla ve git tag oluştur
-            - name: Push updated package.json and create tag
+            - name: Create git tag and push it
               run: |
-                  git push origin HEAD
+                  git tag v$VERSION
+                  git push origin v$VERSION
 
-            # release/v... branch'ını master'a otomatik PR olarak gönder
             - name: Create Pull Request to master
               uses: peter-evans/create-pull-request@v5
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   commit-message: 'ci: merge release v${{ env.VERSION }} to master'
                   title: 'Release v${{ env.VERSION }}'
-                  body: 'Automated pull request to merge release branch to master'
+                  body: 'Automated PR to merge release branch into master.'
                   base: master
                   branch: ${{ env.BRANCH_NAME }}
