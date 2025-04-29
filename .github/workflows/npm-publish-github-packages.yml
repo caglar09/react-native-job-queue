@@ -31,7 +31,7 @@ jobs:
 
             # `prepare` scriptini çalıştır (örneğin bob build), lib klasörünü oluşturur
             - name: Run prepare script
-              run: yarn prepare
+              run: npm run prepare
 
             # Branch adından versiyon numarasını çıkar (v1.2.3 → 1.2.3)
             - name: Extract version (remove "v")
@@ -75,12 +75,12 @@ jobs:
                   echo "EOF" >> $GITHUB_ENV
 
             # lib klasörü ve metadata dosyalarıyla release.zip arşivini oluştur
-            - name: Archive lib folder and metadata into release.zip
-              run: |
-                  mkdir -p dist
-                  cp -r lib dist/
-                  cp package.json README.md LICENSE dist/ || true
-                  cd dist && zip -r ../release.zip . && cd ..
+            # - name: Archive lib folder and metadata into release.zip
+            #   run: |
+            #       mkdir -p dist
+            #       cp -r lib dist/
+            #       cp package.json README.md LICENSE dist/ || true
+            #       cd dist && zip -r ../release.zip . && cd ..
 
             # GitHub release oluştur ve release.zip dosyasını ekle
             - name: Create GitHub Release with asset
@@ -89,7 +89,7 @@ jobs:
                   tag_name: v${{ env.VERSION }}
                   name: Release v${{ env.VERSION }}
                   body: ${{ env.RELEASE_NOTES }}
-                  files: release.zip
+                  # files: release.zip
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
