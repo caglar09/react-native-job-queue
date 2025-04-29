@@ -18,9 +18,7 @@
         "!android/build",
         "!android/.gradle",
         "!ios/build",
-        "!**/__tests__",
-        "!**/__fixtures__",
-        "!**/__mocks__"
+        "!.qodo"
     ],
     "scripts": {
         "start": "react-native start",
