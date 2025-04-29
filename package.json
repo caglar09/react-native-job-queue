@@ -8,11 +8,19 @@
     "main": "lib/commonjs/index.js",
     "module": "lib/module/index.js",
     "files": [
-        "lib/commonjs",
-        "lib/module",
-        "lib/typescript",
+        "lib",
         "src",
-        "index.js"
+        "index.js",
+        "android",
+        "ios",
+        "react-native-job-queue.podspec",
+        "react-native.config.js",
+        "!android/build",
+        "!android/.gradle",
+        "!ios/build",
+        "!**/__tests__",
+        "!**/__fixtures__",
+        "!**/__mocks__"
     ],
     "scripts": {
         "start": "react-native start",
