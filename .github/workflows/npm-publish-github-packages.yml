@@ -27,11 +27,11 @@ jobs:
 
             # Bağımlılıkları yükle
             - name: Install dependencies
-              run: npm i --force
+              run: yarn
 
-            # # `prepare` scriptini çalıştır (örneğin bob build), lib klasörünü oluşturur
-            # - name: Run prepare script
-            #   run: yarn prepare
+            # `prepare` scriptini çalıştır (örneğin bob build), lib klasörünü oluşturur
+            - name: Run prepare script
+              run: yarn prepare
 
             # Branch adından versiyon numarasını çıkar (v1.2.3 → 1.2.3)
             - name: Extract version (remove "v")
