@@ -427,15 +427,15 @@ fabric.properties
 ### AndroidStudio Patch ###
 
 !/gradle/wrapper/gradle-wrapper.jar
-lib/
+#lib/
 # End of https://www.gitignore.io/api/xcode,gradle,cocoapods,reactnative,androidstudio,visualstudiocode
 # docusaurus
 .DS_Store
 
 node_modules
 
-lib/core/metadata.js
-lib/core/MetadataBlog.js
+#lib/core/metadata.js
+#lib/core/MetadataBlog.js
 
 website/translated_docs
 website/build/
