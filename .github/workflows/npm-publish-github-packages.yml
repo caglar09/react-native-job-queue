@@ -103,10 +103,20 @@ jobs:
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Create git tag and push it
+            - name: Create git tag and push it (if not exists)
               run: |
-                  git tag v$VERSION
-                  git push origin v$VERSION
+                  if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+                    echo "⚠️ Tag v$VERSION already exists locally."
+                  else
+                    git tag v$VERSION
+                  fi
+
+                  if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION"; then
+                    echo "✅ Remote tag v$VERSION already exists. Skipping push."
+                  else
+                    echo "🚀 Pushing tag v$VERSION to origin..."
+                    git push origin v$VERSION
+                  fi
 
             - name: Create Pull Request to master
               uses: peter-evans/create-pull-request@v5
