@@ -97,8 +97,6 @@ jobs:
             - name: Push updated package.json and create tag
               run: |
                   git push origin HEAD
-                  git tag v${VERSION}
-                  git push origin v${VERSION}
 
             # release/v... branch'ını master'a otomatik PR olarak gönder
             - name: Create Pull Request to master
