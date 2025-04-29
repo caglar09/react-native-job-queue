@@ -3,7 +3,7 @@ name: Build and Release React Native Library (bob)
 on:
     push:
         branches:
-            - 'release/v*' # Yalnızca release/v... branch'lerinde çalışır
+            - 'release/v*' # Sadece release/v... branch'larında çalışır
 
 jobs:
     build-and-release:
@@ -36,16 +36,13 @@ jobs:
                   git config user.name "github-actions"
                   git config user.email "github-actions@github.com"
 
-            - name: Update version in package.json if needed
+            - name: Update version in package.json
               run: |
                   CURRENT_VERSION=$(node -p "require('./package.json').version")
                   echo "Current version: $CURRENT_VERSION"
                   if [ "$CURRENT_VERSION" != "$VERSION" ]; then
                     echo "Updating package.json version to $VERSION"
                     jq ".version = \"$VERSION\"" package.json > package.tmp.json && mv package.tmp.json package.json
-                    git add package.json
-                    git commit -m "ci: update version to $VERSION [skip ci]"
-                    git push origin HEAD
                   else
                     echo "Version already matches. No update needed."
                   fi
@@ -64,12 +61,12 @@ jobs:
                       exit 1
                     fi
                   done
-                  echo "✅ All output folders exist."
+                  echo "✅ All builder-bob output folders exist."
 
             - name: Ensure correct 'files' in package.json
               run: |
                   grep '"files"' package.json > /dev/null || {
-                    echo "❌ 'files' field missing in package.json. Add the following:"
+                    echo "❌ 'files' field missing in package.json. Add:"
                     echo '  "files": [ "lib/commonjs", "lib/module", "lib/typescript", "src", "index.js" ]'
                     exit 1
                   }
@@ -79,6 +76,12 @@ jobs:
               run: |
                   PACKAGE_FILE=$(yarn pack --filename package.tgz | tail -n 1 | awk '{print $NF}')
                   echo "PACKAGE_FILE=$PACKAGE_FILE" >> $GITHUB_ENV
+
+            - name: Commit version update
+              run: |
+                  git add package.json
+                  git commit -m "ci: update version to $VERSION [skip ci]" || echo "Nothing to commit"
+                  git push origin HEAD
 
             - name: Generate release notes
               id: release_notes
