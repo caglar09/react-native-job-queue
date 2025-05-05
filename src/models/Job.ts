@@ -16,7 +16,7 @@ export interface Job<P extends object> {
     failed: string;
     timeout: number;
     priority: number;
-    isDeleted: Bool;
+    isDeleted: boolean;
 }
 /**
  * represents native Job model
@@ -33,7 +33,7 @@ export interface RawJob {
     failed: string;
     timeout: number;
     priority: number;
-    isDeleted: Bool;
+    isDeleted: boolean;
 }
 
 /**

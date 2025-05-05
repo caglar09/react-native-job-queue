@@ -240,7 +240,7 @@ export class Queue {
             attempts,
             timeout,
             priority,
-            isDeleted: FALSE,
+            isDeleted: false,
             status: "idle"
         };
         if (!this.workers[job.workerName]) {
