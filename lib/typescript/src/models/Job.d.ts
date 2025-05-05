@@ -11,7 +11,7 @@ export interface Job<P extends object> {
     failed: string;
     timeout: number;
     priority: number;
-    isDeleted: Bool;
+    isDeleted: boolean;
 }
 export interface RawJob {
     id: string;
@@ -25,7 +25,7 @@ export interface RawJob {
     failed: string;
     timeout: number;
     priority: number;
-    isDeleted: Bool;
+    isDeleted: boolean;
 }
 export type Bool = TRUE | FALSE;
 type FALSE = 0;
