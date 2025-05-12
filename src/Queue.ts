@@ -48,6 +48,8 @@ export interface QueueEvents {
      * @param job The RawJob that finished.
      */
     jobCompleted: (job: RawJob) => void;
+
+    jobDeleted: (job: RawJob) => void
 }
 
 
@@ -85,7 +87,7 @@ export interface QueueOptions {
  * queue.addJob("testWorker",{text:"Job example payload content text",delay:5000})
  * ```
  */
-export class Queue {
+export class Queue extends EventEmitter<QueueEvents> {
     static get instance() {
         if (this.queueInstance) {
             return this.queueInstance;
@@ -125,6 +127,7 @@ export class Queue {
     private runningJobPromises: { [key: string]: CancellablePromise<any> };
 
     private constructor() {
+        super();
         this.jobStore = NativeModules.JobQueue;
         this.workers = {};
         this.runningJobPromises = {};
@@ -139,19 +142,7 @@ export class Queue {
         this.concurrency = -1;
     }
 
-    /**
-     * Subscribe to queue events.
-     */
-    public on<K extends keyof QueueEvents>(event: K, listener: QueueEvents[K]): void {
-        this.emitter.on(event, listener as any);
-    }
 
-    /**
-     * Unsubscribe from queue events.
-     */
-    public off<K extends keyof QueueEvents>(event: K, listener: QueueEvents[K]): void {
-        this.emitter.off(event, listener as any);
-    }
 
     /**
      * @returns a promise that resolves all jobs of jobStore
@@ -166,10 +157,12 @@ export class Queue {
      * @param job the job to be deleted
      */
     removeJob(job: RawJob) {
-        return this.jobStore.removeJob(job);
+        this.jobStore.removeJob(job);
+        this.emit("jobDeleted", job)
     }
     removeJobPermanent(job: RawJob) {
-        return this.jobStore.removeJobPermanently(job);
+        this.jobStore.removeJobPermanently(job);
+        this.emit("jobDeleted", job)
     }
     /**
      * @param job the job which should be requeued
