@@ -6,7 +6,7 @@ export interface UseQueueState {
     completedCount: number;
     activeJobs: RawJob[];
     lastCompletedJobs: RawJob[];
-    refreshJobs: () => void;
+    refreshJobs: () => Promise<void>;
 }
 export declare function useQueue(): UseQueueState;
 //# sourceMappingURL=useQueue.d.ts.map
