@@ -1,5 +1,6 @@
 import { Job, RawJob } from './models/Job';
 import { Worker } from './Worker';
+import EventEmitter from 'eventemitter3';
 export interface QueueEvents {
     workerAdded: (workerName: string) => void;
     jobAdded: (job: RawJob) => void;
@@ -7,13 +8,14 @@ export interface QueueEvents {
     jobSucceeded: (job: Job<any>) => void;
     jobFailed: (job: RawJob, error: Error) => void;
     jobCompleted: (job: RawJob) => void;
+    jobDeleted: (job: RawJob) => void;
 }
 export interface QueueOptions {
     onQueueFinish?: (executedJobs: Array<Job<any>>) => void;
     updateInterval?: number;
     concurrency?: number;
 }
-export declare class Queue {
+export declare class Queue extends EventEmitter<QueueEvents> {
     static get instance(): Queue;
     get isRunning(): boolean;
     get registeredWorkers(): {
@@ -33,8 +35,6 @@ export declare class Queue {
     private queuedJobExecuter;
     private runningJobPromises;
     private constructor();
-    on<K extends keyof QueueEvents>(event: K, listener: QueueEvents[K]): void;
-    off<K extends keyof QueueEvents>(event: K, listener: QueueEvents[K]): void;
     getJobs(): Promise<RawJob[]>;
     getJobsWithDeleted(): Promise<RawJob[]>;
     removeJob(job: RawJob): void;
