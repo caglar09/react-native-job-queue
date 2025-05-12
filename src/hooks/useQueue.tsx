@@ -11,7 +11,7 @@ export interface UseQueueState {
     completedCount: number;
     activeJobs: RawJob[];
     lastCompletedJobs: RawJob[];
-    refreshJobs: () => void;
+    refreshJobs: () => Promise<void>;
 }
 
 /**
@@ -46,7 +46,7 @@ export function useQueue(): UseQueueState {
     }, []);
 
     useEffect(() => {
-        // İlk yüklemede işleri getir
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         refreshJobs();
 
         // Event listener tanımları
@@ -63,12 +63,17 @@ export function useQueue(): UseQueueState {
             setActiveJobs((prev) => prev.filter((j) => j.id !== job.id));
             setLastCompletedJobs((prev) => [...prev, { ...job }]);
         };
+        const onJobDeleted = (job: RawJob) => {
+            setActiveJobs((prev) => prev.filter((j) => j.id !== job.id));
+            setLastCompletedJobs((prev) => prev.filter((j) => j.id !== job.id));
+        };
 
         // Subscribe
         queue.on('jobAdded', onJobAdded);
         queue.on('jobStarted', onJobStarted);
         queue.on('jobFailed', onJobFailed);
         queue.on('jobSucceeded', onJobSucceeded);
+        queue.on('jobDeleted', onJobSucceeded);
 
         // Cleanup
         return () => {
@@ -76,6 +81,7 @@ export function useQueue(): UseQueueState {
             queue.off('jobStarted', onJobStarted);
             queue.off('jobFailed', onJobFailed);
             queue.off('jobSucceeded', onJobSucceeded);
+            queue.off('jobDeleted', onJobDeleted);
         };
     }, [refreshJobs]);
 
