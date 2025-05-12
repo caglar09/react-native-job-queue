@@ -73,7 +73,7 @@ export function useQueue(): UseQueueState {
         queue.on('jobStarted', onJobStarted);
         queue.on('jobFailed', onJobFailed);
         queue.on('jobSucceeded', onJobSucceeded);
-        queue.on('jobDeleted', onJobSucceeded);
+        queue.on('jobDeleted', onJobDeleted);
 
         // Cleanup
         return () => {
