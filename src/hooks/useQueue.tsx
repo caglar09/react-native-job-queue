@@ -69,19 +69,19 @@ export function useQueue(): UseQueueState {
         };
 
         // Subscribe
-        queue.on('jobAdded', onJobAdded);
-        queue.on('jobStarted', onJobStarted);
-        queue.on('jobFailed', onJobFailed);
-        queue.on('jobSucceeded', onJobSucceeded);
-        queue.on('jobDeleted', onJobDeleted);
+        queue.addListener('jobAdded', onJobAdded);
+        queue.addListener('jobStarted', onJobStarted);
+        queue.addListener('jobFailed', onJobFailed);
+        queue.addListener('jobSucceeded', onJobSucceeded);
+        queue.addListener('jobDeleted', onJobDeleted);
 
         // Cleanup
         return () => {
-            queue.off('jobAdded', onJobAdded);
-            queue.off('jobStarted', onJobStarted);
-            queue.off('jobFailed', onJobFailed);
-            queue.off('jobSucceeded', onJobSucceeded);
-            queue.off('jobDeleted', onJobDeleted);
+            queue.removeListener('jobAdded', onJobAdded);
+            queue.removeListener('jobStarted', onJobStarted);
+            queue.removeListener('jobFailed', onJobFailed);
+            queue.removeListener('jobSucceeded', onJobSucceeded);
+            queue.removeListener('jobDeleted', onJobDeleted);
         };
     }, [refreshJobs]);
 

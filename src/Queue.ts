@@ -190,7 +190,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             throw new Error(`Worker "${worker.name}" already exists.`);
         }
         this.workers[worker.name] = worker;
-        this.emitter.emit('workerAdded', worker.name);
+        this.emit('workerAdded', worker.name);
     }
 
     /**
@@ -241,7 +241,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         }
 
         this.jobStore.addJob(job);
-        this.emitter.emit('jobAdded', job);
+        this.emit('jobAdded', job);
         if (startQueue && !this.isActive) {
             this.start();
         }
@@ -398,7 +398,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         try {
             job.status = "processing";
             this.jobStore.updateJob({ ...job, payload: JSON.stringify(payload) });
-            this.emitter.emit('jobStarted', job);
+            this.emit('jobStarted', job);
 
             this.activeJobCount++;
             if (!this.workers[rawJob.workerName]) {
@@ -413,7 +413,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             job.status = "finished";
             this.jobStore.updateJob({ ...job, payload: JSON.stringify(payload) });
             this.jobStore.removeJob(rawJob);
-            this.emitter.emit('jobSucceeded', job);
+            this.emit('jobSucceeded', job);
         } catch (err) {
             const error = err as Error;
             const { attempts } = rawJob;
@@ -428,12 +428,12 @@ export class Queue extends EventEmitter<QueueEvents> {
             worker.triggerFailure({ ...job, metaData, failed }, error);
             const failedJob = { ...rawJob, ...{ active: FALSE, metaData, failed, status: "failed" } } as RawJob;
             this.jobStore.updateJob(failedJob);
-            this.emitter.emit('jobFailed', failedJob, error);
+            this.emit('jobFailed', failedJob, error);
         } finally {
             delete this.runningJobPromises[job.id];
             worker.decreaseExecutionCount();
             worker.triggerCompletion(job);
-            this.emitter.emit('jobCompleted', { ...job });
+            this.emit('jobCompleted', { ...job });
             this.executedJobs.push(rawJob);
             this.activeJobCount--;
         }
