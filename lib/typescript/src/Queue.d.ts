@@ -7,6 +7,7 @@ export interface QueueEvents {
     jobStarted: (job: RawJob) => void;
     jobSucceeded: (job: Job<any>) => void;
     jobFailed: (job: RawJob, error: Error) => void;
+    jobCancelled: (job: RawJob) => void;
     jobCompleted: (job: RawJob) => void;
     jobDeleted: (job: RawJob) => void;
 }
@@ -51,6 +52,8 @@ export declare class Queue extends EventEmitter<QueueEvents> {
     start(): Promise<void>;
     stop(): void;
     cancelJob(jobId: string, exception?: Error): void;
+    cancelAllActiveJobs(): Promise<void>;
+    cancelActiveJob(job: RawJob): void;
     private resetActiveJob;
     private resetActiveJobs;
     private scheduleQueue;

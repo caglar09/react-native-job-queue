@@ -3,6 +3,7 @@ export interface UseQueueState {
     queuedCount: number;
     activeCount: number;
     failedCount: number;
+    cancelledCount: number;
     completedCount: number;
     activeJobs: RawJob[];
     lastCompletedJobs: RawJob[];

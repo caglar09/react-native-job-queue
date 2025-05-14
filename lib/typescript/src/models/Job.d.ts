@@ -1,4 +1,4 @@
-export type JobStatus = "idle" | "processing" | "finished" | "failed";
+export type JobStatus = "idle" | "processing" | "finished" | "failed" | "cancelled";
 export interface Job<P extends object> {
     id: string;
     workerName: string;
