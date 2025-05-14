@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-empty-function */
 import { AppState, NativeModules, Platform } from 'react-native';
 
-import { FALSE, Job, RawJob, JobStatus } from './models/Job';
+import { FALSE, Job, RawJob, JobStatus, TRUE } from './models/Job';
 import { JobStore } from './models/JobStore';
 import { Uuid } from './utils/Uuid';
 import { Worker, CANCEL, CancellablePromise } from './Worker';
@@ -42,6 +43,13 @@ export interface QueueEvents {
      * @param error The error thrown.
      */
     jobFailed: (job: RawJob, error: Error) => void;
+
+    /**
+     * Fired when a job fails.
+     * @param job The RawJob that failed.
+     * @param error The error thrown.
+     */
+    jobCancelled: (job: RawJob) => void;
 
     /**
      * Fired when a job completes (regardless of success or failure).
@@ -168,7 +176,17 @@ export class Queue extends EventEmitter<QueueEvents> {
      * @param job the job which should be requeued
      */
     requeueJob(job: RawJob) {
-        return this.jobStore.updateJob({ ...job, failed: '' });
+        this.jobStore.updateJob({ ...job, failed: '', status: "idle", active: TRUE });
+
+        if (!this.isActive) {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            this.start().then(() => {
+                console.log("Queue restarted")
+            }).catch(() => {
+                console.log("Queue could not be restarted")
+            });
+        }
     }
 
     configure(options: QueueOptions) {
@@ -279,6 +297,22 @@ export class Queue extends EventEmitter<QueueEvents> {
             throw new Error(`Job with id ${jobId} not currently running`);
         }
     }
+
+    async cancelAllActiveJobs() {
+        const jobs = await this.jobStore.getActiveMarkedJobs()
+
+        jobs.forEach((job) => {
+            const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
+            this.jobStore.updateJob(newJob as RawJob);
+            this.emit('jobCancelled', newJob as RawJob);
+        })
+    }
+    cancelActiveJob(job: RawJob) {
+        const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
+        this.jobStore.updateJob(newJob as RawJob);
+        this.emit('jobCancelled', newJob as RawJob);
+    }
+
     private resetActiveJob = (job: RawJob) => {
         this.jobStore.updateJob({ ...job, ...{ active: FALSE } });
     };

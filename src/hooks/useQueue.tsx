@@ -8,6 +8,7 @@ export interface UseQueueState {
     queuedCount: number;
     activeCount: number;
     failedCount: number;
+    cancelledCount: number;
     completedCount: number;
     activeJobs: RawJob[];
     lastCompletedJobs: RawJob[];
@@ -21,6 +22,7 @@ export interface UseQueueState {
  * - queuedCount: number of jobs waiting to start (status === 'idle')
  * - activeCount: number of jobs currently processing
  * - failedCount: number of jobs that have failed
+ * - cancelledCount: number of jobs that have been cancelled
  * - completedCount: number of jobs that have completed successfully
  * - activeJobs: list of current non-deleted jobs
  * - lastCompletedJobs: list of jobs marked as deleted (completed)
@@ -33,6 +35,7 @@ export function useQueue(): UseQueueState {
     const queuedCount = useMemo(() => activeJobs.filter((j) => j.status === 'idle').length, [activeJobs]);
     const activeCount = useMemo(() => activeJobs.filter((j) => j.status === 'processing').length, [activeJobs]);
     const failedCount = useMemo(() => activeJobs.filter((j) => j.status === 'failed').length, [activeJobs]);
+    const cancelledCount = useMemo(() => activeJobs.filter((j) => j.status === 'cancelled').length, [activeJobs]);
     const completedCount = useMemo(() => lastCompletedJobs.length, [lastCompletedJobs]);
 
     // Yığın içindeki işleri güncelle
@@ -59,6 +62,9 @@ export function useQueue(): UseQueueState {
         const onJobFailed = (job: RawJob) => {
             setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, ...job } : j)));
         };
+        const onJobCancelled = (job: RawJob) => {
+            setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, ...job } : j)));
+        };
         const onJobSucceeded = (job: Job<any>) => {
             setActiveJobs((prev) => prev.filter((j) => j.id !== job.id));
             setLastCompletedJobs((prev) => [...prev, { ...job }]);
@@ -74,6 +80,7 @@ export function useQueue(): UseQueueState {
         queue.addListener('jobFailed', onJobFailed);
         queue.addListener('jobSucceeded', onJobSucceeded);
         queue.addListener('jobDeleted', onJobDeleted);
+        queue.addListener('jobCancelled', onJobCancelled);
 
         // Cleanup
         return () => {
@@ -82,6 +89,7 @@ export function useQueue(): UseQueueState {
             queue.removeListener('jobFailed', onJobFailed);
             queue.removeListener('jobSucceeded', onJobSucceeded);
             queue.removeListener('jobDeleted', onJobDeleted);
+            queue.removeListener('jobCancelled', onJobCancelled);
         };
     }, [refreshJobs]);
 
@@ -90,6 +98,7 @@ export function useQueue(): UseQueueState {
         activeCount,
         failedCount,
         completedCount,
+        cancelledCount,
         activeJobs,
         lastCompletedJobs,
         refreshJobs,

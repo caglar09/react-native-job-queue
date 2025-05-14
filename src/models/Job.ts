@@ -1,4 +1,4 @@
-export type JobStatus = "idle" | "processing" | "finished" | "failed"
+export type JobStatus = "idle" | "processing" | "finished" | "failed" | "cancelled"
 
 /**
  * represents Job model with Generics
