@@ -310,7 +310,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         }
     }
     async cancelAllActiveJobs() {
-        const jobs = await this.jobStore.getActiveMarkedJobs()
+        const jobs = await this.jobStore.getJobs()
 
         jobs.forEach((job) => {
             const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
