@@ -1,6 +1,11 @@
 import { Job, RawJob } from './models/Job';
 import { Worker } from './Worker';
 import EventEmitter from 'eventemitter3';
+type QueueErrorType = "cancelled" | "error";
+export declare class QueueError extends Error {
+    code: QueueErrorType;
+    constructor(message: string, code?: QueueErrorType);
+}
 export interface QueueEvents {
     workerAdded: (workerName: string) => void;
     jobAdded: (job: RawJob) => void;
