@@ -317,7 +317,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             const isRunning = this.runningJobPromises[job.id];
             // eslint-disable-next-line @typescript-eslint/no-misused-promises
             if (!!Boolean(isRunning)) {
-                this.cancelJob(job.id, new Error(`Job with id ${job.id} cancelled`));
+                this.cancelJob(job.id, new QueueError(`Job with id ${job.id} cancelled`, "cancelled"));
             }
             this.jobStore.updateJob(newJob as RawJob);
             this.emit('jobCancelled', newJob as RawJob);
@@ -329,7 +329,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         const isRunning = this.runningJobPromises[job.id];
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
         if (!!isRunning) {
-            this.cancelJob(job.id, new Error(`Job with id ${job.id} cancelled`));
+            this.cancelJob(job.id, new QueueError(`Job with id ${job.id} cancelled`, "cancelled"));
         }
 
         this.jobStore.updateJob(newJob as RawJob);
