@@ -1,13 +1,25 @@
+/* eslint-disable no-extra-boolean-cast */
 /* eslint-disable @typescript-eslint/no-empty-function */
 import { AppState, NativeModules, Platform } from 'react-native';
 
-import { FALSE, Job, RawJob, JobStatus, TRUE } from './models/Job';
+import { FALSE, Job, RawJob, TRUE } from './models/Job';
 import { JobStore } from './models/JobStore';
 import { Uuid } from './utils/Uuid';
 import { Worker, CANCEL, CancellablePromise } from './Worker';
 
 
 import EventEmitter from 'eventemitter3';
+
+type QueueErrorType = "cancelled" | "error";
+
+export class QueueError extends Error {
+    code: QueueErrorType;
+    constructor(message: string, code: QueueErrorType = "error") {
+        super(message);
+        this.name = 'QueueError';
+        this.code = code;
+    }
+}
 
 /**
  * Events emitted by the Queue.
@@ -205,7 +217,7 @@ export class Queue extends EventEmitter<QueueEvents> {
      */
     addWorker(worker: Worker<any>) {
         if (this.workers[worker.name]) {
-            throw new Error(`Worker "${worker.name}" already exists.`);
+            throw new QueueError(`Worker "${worker.name}" already exists.`, "error");
         }
         this.workers[worker.name] = worker;
         this.emit('workerAdded', worker.name);
@@ -255,7 +267,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             status: "idle"
         };
         if (!this.workers[job.workerName]) {
-            throw new Error(`Missing worker with name ${job.workerName}`);
+            throw new QueueError(`Missing worker with name ${job.workerName}`);
         }
 
         this.jobStore.addJob(job);
@@ -290,26 +302,38 @@ export class Queue extends EventEmitter<QueueEvents> {
     cancelJob(jobId: string, exception?: Error) {
         const promise = this.runningJobPromises[jobId];
         if (promise !== undefined && typeof promise[CANCEL] === 'function') {
-            promise[CANCEL](exception || new Error(`canceled`));
+            promise[CANCEL](exception || new QueueError(`job canceled`, "cancelled"));
         } else if (!promise[CANCEL]) {
             console.warn('Worker does not have a cancel method implemented');
         } else {
-            throw new Error(`Job with id ${jobId} not currently running`);
+            throw new QueueError(`Job with id ${jobId} not currently running`, "error");
         }
     }
-
     async cancelAllActiveJobs() {
         const jobs = await this.jobStore.getActiveMarkedJobs()
 
         jobs.forEach((job) => {
             const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
+            const isRunning = this.runningJobPromises[job.id];
+            // eslint-disable-next-line @typescript-eslint/no-misused-promises
+            if (!!Boolean(isRunning)) {
+                this.cancelJob(job.id, new Error(`Job with id ${job.id} cancelled`));
+            }
             this.jobStore.updateJob(newJob as RawJob);
             this.emit('jobCancelled', newJob as RawJob);
         })
     }
     cancelActiveJob(job: RawJob) {
         const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
+
+        const isRunning = this.runningJobPromises[job.id];
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        if (!!isRunning) {
+            this.cancelJob(job.id, new Error(`Job with id ${job.id} cancelled`));
+        }
+
         this.jobStore.updateJob(newJob as RawJob);
+
         this.emit('jobCancelled', newJob as RawJob);
     }
 
@@ -436,7 +460,7 @@ export class Queue extends EventEmitter<QueueEvents> {
 
             this.activeJobCount++;
             if (!this.workers[rawJob.workerName]) {
-                throw new Error(`Missing worker with name ${rawJob.workerName}`);
+                throw new QueueError(`Missing worker with name ${rawJob.workerName}`, "error");
             }
             const promise = worker.execute(rawJob);
 
@@ -449,7 +473,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             this.jobStore.removeJob(rawJob);
             this.emit('jobSucceeded', job);
         } catch (err) {
-            const error = err as Error;
+            const error = err as QueueError;
             const { attempts } = rawJob;
             // eslint-disable-next-line prefer-const
             let { errors, failedAttempts } = JSON.parse(rawJob.metaData) as { errors: string[]; failedAttempts: number };
@@ -460,7 +484,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             }
             const metaData = JSON.stringify({ errors: [...errors, error], failedAttempts });
             worker.triggerFailure({ ...job, metaData, failed }, error);
-            const failedJob = { ...rawJob, ...{ active: FALSE, metaData, failed, status: "failed" } } as RawJob;
+            const failedJob = { ...rawJob, ...{ active: FALSE, metaData, failed, status: error.code === "cancelled" ? "cancelled" : "failed" } } as RawJob;
             this.jobStore.updateJob(failedJob);
             this.emit('jobFailed', failedJob, error);
         } finally {

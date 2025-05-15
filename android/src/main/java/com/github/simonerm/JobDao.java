@@ -13,22 +13,22 @@ public interface JobDao {
     @Query("SELECT * FROM job WHERE is_deleted == 0")
     List<Job> getAll();
 
-    @Query("SELECT * FROM job WHERE active == 0 AND failed == '' AND is_deleted == 0 ORDER BY priority DESC,datetime(created) LIMIT 1")
+    @Query("SELECT * FROM job WHERE active == 0 AND status != 'failed' AND status != 'cancelled' AND is_deleted == 0 ORDER BY priority DESC,datetime(created) LIMIT 1")
     Job getNextJob();
 
     @Query("SELECT * FROM job WHERE is_deleted == 0 ORDER BY priority DESC,datetime(created)")
     List<Job> getJobs();
-  
+
     @Query("SELECT * FROM job ORDER BY priority DESC,datetime(created)")
     List<Job> getJobsWithDeleted();
 
     @Query("SELECT * FROM job WHERE active == 1 AND is_deleted == 0")
     List<Job> getActiveMarkedJobs();
 
-    @Query("SELECT * FROM job WHERE active == 0 AND failed == '' AND worker_name == :workerName AND is_deleted == 0 ORDER BY priority DESC,datetime(created) LIMIT :limit")
+    @Query("SELECT * FROM job WHERE active == 0 AND status != 'failed' AND status != 'cancelled' AND worker_name == :workerName AND is_deleted == 0 ORDER BY priority DESC,datetime(created) LIMIT :limit")
     List<Job> getJobsForWorker(String workerName, int limit);
-   
-    @Query("SELECT * FROM job WHERE active == 0 AND failed == '' AND worker_name == :workerName ORDER BY priority DESC,datetime(created) LIMIT :limit")
+
+    @Query("SELECT * FROM job WHERE active == 0 AND status != 'failed' AND status != 'cancelled' AND worker_name == :workerName ORDER BY priority DESC,datetime(created) LIMIT :limit")
     List<Job> getJobsForWorkerWithDeleted(String workerName, int limit);
 
     @Query("SELECT * FROM job WHERE id LIKE :id AND is_deleted == 0")
