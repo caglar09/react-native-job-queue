@@ -73,6 +73,9 @@ export function useQueue(): UseQueueState {
             setActiveJobs((prev) => prev.filter((j) => j.id !== job.id));
             setLastCompletedJobs((prev) => prev.filter((j) => j.id !== job.id));
         };
+        const onJobRequeued = (job: RawJob) => {
+            setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, ...job } : j)));
+        };
 
         // Subscribe
         queue.addListener('jobAdded', onJobAdded);
@@ -81,6 +84,7 @@ export function useQueue(): UseQueueState {
         queue.addListener('jobSucceeded', onJobSucceeded);
         queue.addListener('jobDeleted', onJobDeleted);
         queue.addListener('jobCancelled', onJobCancelled);
+        queue.addListener('jobRequeued', onJobRequeued);
 
         // Cleanup
         return () => {
@@ -90,6 +94,7 @@ export function useQueue(): UseQueueState {
             queue.removeListener('jobSucceeded', onJobSucceeded);
             queue.removeListener('jobDeleted', onJobDeleted);
             queue.removeListener('jobCancelled', onJobCancelled);
+            queue.removeListener('jobRequeued', onJobRequeued);
         };
     }, [refreshJobs]);
 

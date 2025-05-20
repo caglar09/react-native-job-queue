@@ -69,7 +69,17 @@ export interface QueueEvents {
      */
     jobCompleted: (job: RawJob) => void;
 
+    /**
+     * Fired when a job is deleted.
+     * @param job The RawJob that was deleted.
+     */
     jobDeleted: (job: RawJob) => void
+
+    /**
+     * Fired when a job is requeued.
+     * @param job The RawJob that was requeued.
+     */
+    jobRequeued: (job: RawJob) => void
 }
 
 
@@ -188,8 +198,9 @@ export class Queue extends EventEmitter<QueueEvents> {
      * @param job the job which should be requeued
      */
     requeueJob(job: RawJob) {
-        this.jobStore.updateJob({ ...job, failed: '', status: "idle", active: TRUE });
-
+        const newJob = { ...job, failed: '', status: "idle", active: FALSE } as RawJob;
+        this.jobStore.updateJob(newJob);
+        this.emit("jobRequeued", newJob)
         if (!this.isActive) {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore

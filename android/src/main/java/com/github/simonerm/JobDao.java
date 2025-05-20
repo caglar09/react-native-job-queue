@@ -16,7 +16,7 @@ public interface JobDao {
     @Query("SELECT * FROM job WHERE active == 0 AND status != 'failed' AND status != 'cancelled' AND is_deleted == 0 ORDER BY priority DESC,datetime(created) LIMIT 1")
     Job getNextJob();
     
-    @Query("SELECT * FROM job WHERE active == 1 AND status == 'progress' AND is_deleted = 0 ORDER BY priority DESC,datetime(created) LIMIT 1")
+    @Query("SELECT * FROM job WHERE active == 0 AND status == 'progress' AND is_deleted = 0 ORDER BY priority DESC,datetime(created) LIMIT 1")
     Job getWorkInProgressJob();
 
     @Query("SELECT * FROM job WHERE is_deleted == 0 ORDER BY priority DESC,datetime(created)")
