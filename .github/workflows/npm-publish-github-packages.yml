@@ -22,6 +22,8 @@ jobs:
               run: |
                   sudo apt-get update
                   sudo apt-get install -y gh
+            - name: Pull latest branch changes before commit
+              run: git pull origin ${{ env.BRANCH_NAME }} --rebase
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
