@@ -369,7 +369,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             return;
         }
         let nextJob = await this.jobStore.getWorkInProgressJob();
-        if (!nextJob) {
+        if (!this.isJobNotEmpty(nextJob)) {
             nextJob = await this.jobStore.getNextJob();
         }
         if (this.isJobNotEmpty(nextJob)) {
