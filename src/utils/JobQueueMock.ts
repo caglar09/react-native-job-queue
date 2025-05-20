@@ -25,6 +25,12 @@ export class JobStoreMock implements JobStore {
         const sorted = this.sortJobs(filtered);
         return new Promise((resolve) => resolve(sorted[0] || {}));
     }
+    getWorkInProgressJob(): Promise<RawJob> {
+        // "SELECT * FROM job WHERE active == 0 AND failed == '' ORDER BY priority,datetime(created) LIMIT 1"
+        const filtered = this.jobs.filter((job) => job.active === 1 && job.status === 'processing');
+        const sorted = this.sortJobs(filtered);
+        return new Promise((resolve) => resolve(sorted[0] || {}));
+    }
     getJobsForWorker(name: string, count: number): Promise<RawJob[]> {
         const filtered = this.jobs.filter((job) => job.workerName === name);
         const sorted = this.sortJobs(filtered);

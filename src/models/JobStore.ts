@@ -9,6 +9,7 @@ export interface JobStore {
     getJobsWithDeleted(): Promise<RawJob[]>;
     getActiveMarkedJobs(): Promise<RawJob[]>;
     getNextJob(): Promise<RawJob>;
+    getWorkInProgressJob(): Promise<RawJob>;
     getJobsForWorker(name: string, count: number): Promise<RawJob[]>;
     getJobsForWorkerWithDeleted(name: string, count: number): Promise<RawJob[]>;
     updateJob(job: RawJob): void;

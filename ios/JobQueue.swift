@@ -87,6 +87,17 @@ public class JobQueue:NSObject{
             
         }
     }
+    @objc
+    public func getWorkInProgressJob(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock){
+        if(db != nil){
+            if let job =  db?.getWorkInProgressJob(){
+                resolve(job.toDictionary())
+            }else{
+                resolve([String:Any]())
+            }
+            
+        }
+    }
     
     @objc
     public func getJobsForWorker(_ name:String, count:Int, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock){

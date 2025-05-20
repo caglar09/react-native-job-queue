@@ -122,5 +122,16 @@ public class JobQueueModule extends ReactContextBaseJavaModule {
             promise.resolve(Arguments.createMap());
         }
     }
+    @ReactMethod
+    public void getWorkInProgressJob(Promise promise) {
+        JobDao dao = JobDatabase.getAppDatabase(this.reactContext).jobDao();
+
+        Job nextJob=dao.getWorkInProgressJob();
+        if(nextJob!=null){
+            promise.resolve(ConversionHelper.getJobAsWritableMap(nextJob));
+        }else{
+            promise.resolve(Arguments.createMap());
+        }
+    }
 
 }

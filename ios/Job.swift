@@ -131,6 +131,22 @@ extension SQLiteDatabase {
         
         return mapColumnsToJob(sqlStatement: queryStatement)
     }
+    func getWorkInProgressJob() -> Job? {
+        let querySql = "SELECT * FROM job WHERE active == 1 AND status == 'progress' AND is_deleted = 0 ORDER BY priority DESC,datetime(created) LIMIT 1;"
+        guard let queryStatement = try? prepareStatement(sql: querySql) else {
+            return nil
+        }
+        
+        defer {
+            sqlite3_finalize(queryStatement)
+        }
+        
+        guard sqlite3_step(queryStatement) == SQLITE_ROW else {
+            return nil
+        }
+        
+        return mapColumnsToJob(sqlStatement: queryStatement)
+    }
     func getJobsForWorker(name:NSString,count:Int32) -> [Job]? {
         let querySql = "SELECT * FROM job WHERE active == 0 AND status != 'failed' AND status != 'cancelled' AND worker_name == ? AND is_deleted = 0 ORDER BY priority DESC,datetime(created) LIMIT ?;"
         guard let queryStatement = try? prepareStatement(sql: querySql) else {
