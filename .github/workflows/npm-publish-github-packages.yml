@@ -18,6 +18,10 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v4
 
+            - name: Install GitHub CLI
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y gh
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
@@ -108,18 +112,33 @@ jobs:
 
             - name: Create git tag and push it (if not exists)
               run: |
-                  if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-                    echo "⚠️ Tag v$VERSION already exists locally."
+                  echo "🔎 Checking if tag v$VERSION exists remotely..."
+                  if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION"; then
+                    echo "❌ Remote tag exists. Deleting..."
+                    git push --delete origin "v$VERSION"
                   else
-                    git tag v$VERSION
+                    echo "✅ Remote tag does not exist."
                   fi
 
-                  if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION"; then
-                    echo "✅ Remote tag v$VERSION already exists. Skipping push."
+                  echo "🔎 Checking if local tag v$VERSION exists..."
+                  if git tag | grep -q "^v$VERSION$"; then
+                    echo "❌ Local tag exists. Deleting..."
+                    git tag -d "v$VERSION"
                   else
-                    echo "🚀 Pushing tag v$VERSION to origin..."
-                    git push origin v$VERSION
+                    echo "✅ Local tag does not exist."
                   fi
+
+                  echo "🔎 Checking for existing GitHub release..."
+                  if gh release view "v$VERSION" >/dev/null 2>&1; then
+                    echo "❌ GitHub release v$VERSION exists. Deleting..."
+                    gh release delete "v$VERSION" --yes
+                  else
+                    echo "✅ No GitHub release found for v$VERSION"
+                  fi
+
+                  echo "🏷️ Recreating tag v$VERSION..."
+                  git push origin "v$VERSION"
+                  git tag "v$VERSION"
 
             - name: Create Pull Request to master
               uses: peter-evans/create-pull-request@v5
