@@ -15,6 +15,7 @@ export interface QueueEvents {
     jobCancelled: (job: RawJob) => void;
     jobCompleted: (job: RawJob) => void;
     jobDeleted: (job: RawJob) => void;
+    jobRequeued: (job: RawJob) => void;
 }
 export interface QueueOptions {
     onQueueFinish?: (executedJobs: Array<Job<any>>) => void;
