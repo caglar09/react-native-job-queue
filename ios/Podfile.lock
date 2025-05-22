@@ -1,0 +1,16 @@
+PODS:
+  - simdjson (3.1.0-wmelon1)
+
+DEPENDENCIES:
+  - "simdjson (from `../node_modules/@nozbe/simdjson`)"
+
+EXTERNAL SOURCES:
+  simdjson:
+    :path: "../node_modules/@nozbe/simdjson"
+
+SPEC CHECKSUMS:
+  simdjson: e6bfae9ce4bcdc80452d388d593816f1ca2106f3
+
+PODFILE CHECKSUM: ba2addbab1e3effa9e99df7b12ce9db2a93e036e
+
+COCOAPODS: 1.16.2
