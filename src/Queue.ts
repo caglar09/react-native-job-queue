@@ -1,9 +1,10 @@
 /* eslint-disable no-extra-boolean-cast */
 /* eslint-disable @typescript-eslint/no-empty-function */
-import { AppState, NativeModules, Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { FALSE, Job, RawJob, TRUE } from './models/Job';
-import { JobStore } from './models/JobStore';
+import { JobStore } from './models/JobStore'; // This is the interface
+import { WatermelonDBJobStore } from './JobStore'; // This is the implementation
 import { Uuid } from './utils/Uuid';
 import { Worker, CANCEL, CancellablePromise } from './Worker';
 
@@ -141,7 +142,7 @@ export class Queue extends EventEmitter<QueueEvents> {
     private static queueInstance: Queue | null;
     private emitter: EventEmitter<QueueEvents> = new EventEmitter<QueueEvents>();
 
-    private jobStore: JobStore;
+    private jobStore: JobStore; // Keep type as interface for flexibility
     private workers: { [key: string]: Worker<any> };
     private isActive: boolean;
 
@@ -158,7 +159,7 @@ export class Queue extends EventEmitter<QueueEvents> {
 
     private constructor() {
         super();
-        this.jobStore = NativeModules.JobQueue;
+        this.jobStore = new WatermelonDBJobStore();
         this.workers = {};
         this.runningJobPromises = {};
         this.isActive = false;
@@ -186,20 +187,20 @@ export class Queue extends EventEmitter<QueueEvents> {
     /**
      * @param job the job to be deleted
      */
-    removeJob(job: RawJob) {
-        this.jobStore.removeJob(job);
+    async removeJob(job: RawJob) {
+        await this.jobStore.removeJob(job);
         this.emit("jobDeleted", job)
     }
-    removeJobPermanent(job: RawJob) {
-        this.jobStore.removeJobPermanently(job);
+    async removeJobPermanent(job: RawJob) {
+        await this.jobStore.removeJobPermanently(job);
         this.emit("jobDeleted", job)
     }
     /**
      * @param job the job which should be requeued
      */
-    requeueJob(job: RawJob) {
+    async requeueJob(job: RawJob) {
         const newJob = { ...job, failed: '', status: "idle", active: FALSE } as RawJob;
-        this.jobStore.updateJob(newJob);
+        await this.jobStore.updateJob(newJob);
         this.emit("jobRequeued", newJob)
         if (!this.isActive) {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -240,10 +241,10 @@ export class Queue extends EventEmitter<QueueEvents> {
      * @param name
      * @param [deleteRelatedJobs=false] removes all queued jobs releated to the worker if set to true
      */
-    removeWorker(name: string, deleteRelatedJobs = false) {
+    async removeWorker(name: string, deleteRelatedJobs = false) {
         delete this.workers[name];
         if (deleteRelatedJobs) {
-            this.jobStore.removeJobsByWorkerName(name);
+            await this.jobStore.removeJobsByWorkerName(name);
         }
     }
 
@@ -255,7 +256,7 @@ export class Queue extends EventEmitter<QueueEvents> {
      * @param [startQueue=true] if set to false the queue won't start automaticly when adding a job
      * @returns job id
      */
-    addJob<P extends object>(
+    async addJob<P extends object>(
         workerName: string,
         payload: P,
         options = { attempts: 0, timeout: 0, priority: 0 },
@@ -281,10 +282,11 @@ export class Queue extends EventEmitter<QueueEvents> {
             throw new QueueError(`Missing worker with name ${job.workerName}`);
         }
 
-        this.jobStore.addJob(job);
+        await this.jobStore.addJob(job);
         this.emit('jobAdded', job);
         if (startQueue && !this.isActive) {
-            this.start();
+            // this.start() is already async
+            await this.start();
         }
 
         return id;
@@ -321,39 +323,38 @@ export class Queue extends EventEmitter<QueueEvents> {
         }
     }
     async cancelAllActiveJobs() {
-        const jobs = await this.jobStore.getJobs()
+        const jobs = await this.jobStore.getJobs(); // Already async
 
-        jobs.forEach((job) => {
+        for (const job of jobs) { // Use for...of for async operations in loop
             const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
             const isRunning = this.runningJobPromises[job.id];
-            // eslint-disable-next-line @typescript-eslint/no-misused-promises
             if (!!Boolean(isRunning)) {
                 this.cancelJob(job.id, new QueueError(`Job with id ${job.id} cancelled`, "cancelled"));
             }
-            this.jobStore.updateJob(newJob as RawJob);
+            await this.jobStore.updateJob(newJob as RawJob); // Added await
             this.emit('jobCancelled', newJob as RawJob);
-        })
+        }
     }
-    cancelActiveJob(job: RawJob) {
+    async cancelActiveJob(job: RawJob) { // Made async
         const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
 
         const isRunning = this.runningJobPromises[job.id];
-        // eslint-disable-next-line @typescript-eslint/no-misused-promises
-        if (!!isRunning) {
+        if (!!Boolean(isRunning)) {
             this.cancelJob(job.id, new QueueError(`Job with id ${job.id} cancelled`, "cancelled"));
         }
 
-        this.jobStore.updateJob(newJob as RawJob);
+        await this.jobStore.updateJob(newJob as RawJob); // Added await
 
         this.emit('jobCancelled', newJob as RawJob);
     }
 
-    private resetActiveJob = (job: RawJob) => {
-        this.jobStore.updateJob({ ...job, ...{ active: FALSE } });
+    private resetActiveJob = async (job: RawJob) => { // Made async
+        await this.jobStore.updateJob({ ...job, ...{ active: FALSE } }); // Added await
     };
     private async resetActiveJobs() {
         const activeMarkedJobs = await this.jobStore.getActiveMarkedJobs();
-        const resetTasks = activeMarkedJobs.map(this.resetActiveJob);
+        // .map with async function returns array of Promises
+        const resetTasks = activeMarkedJobs.map(j => this.resetActiveJob(j)); // Pass the async function directly
         await Promise.all(resetTasks);
     }
     private scheduleQueue() {
@@ -469,7 +470,8 @@ export class Queue extends EventEmitter<QueueEvents> {
 
         try {
             job.status = "processing";
-            this.jobStore.updateJob({ ...job, payload: JSON.stringify(payload) });
+            // Ensure payload is stringified for updateJob
+            await this.jobStore.updateJob({ ...job, payload: JSON.stringify(job.payload) }); // Added await
             this.emit('jobStarted', job);
 
             this.activeJobCount++;
@@ -483,8 +485,8 @@ export class Queue extends EventEmitter<QueueEvents> {
 
             worker.triggerSuccess(job);
             job.status = "finished";
-            this.jobStore.updateJob({ ...job, payload: JSON.stringify(payload) });
-            this.jobStore.removeJob(rawJob);
+            await this.jobStore.updateJob({ ...job, payload: JSON.stringify(job.payload) }); // Added await
+            await this.jobStore.removeJob(rawJob); // This is a soft delete, added await
             this.emit('jobSucceeded', job);
         } catch (err) {
             const error = err as QueueError;
@@ -499,7 +501,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             const metaData = JSON.stringify({ errors: [...errors, error], failedAttempts });
             worker.triggerFailure({ ...job, metaData, failed }, error);
             const failedJob = { ...rawJob, ...{ active: FALSE, metaData, failed, status: error.code === "cancelled" ? "cancelled" : "failed" } } as RawJob;
-            this.jobStore.updateJob(failedJob);
+            await this.jobStore.updateJob(failedJob); // Added await
             this.emit('jobFailed', failedJob, error);
         } finally {
             delete this.runningJobPromises[job.id];
