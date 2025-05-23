@@ -17,10 +17,11 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/SimonErm/react-native-job-queue.git", :tag => "#{s.version}" }
   s.swift_version = "5.0"
 
-  s.source_files = "ios/**/*.{h,m,swift}"
+  # No longer providing its own native iOS source files directly in this package
+  # s.source_files = "ios/**/*.{h,m,swift}" 
   s.requires_arc = true
   s.dependency "React"
-  s.library = "sqlite3"
+  # s.library = "sqlite3" # Removed as the native SQLite code is deleted
   # s.dependency "..."
 end
 
