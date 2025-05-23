@@ -158,3 +158,119 @@ describe('Queue Basics', () => {
         queue.start();
     });
 });
+
+describe('Queue Logging', () => {
+    let consoleLogSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+        // Mock console.log before each test
+        consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+        // Ensure a clean state for the queue's workers and configuration for each test
+        // Note: This assumes 'queue' is a singleton and its state persists.
+        // We might need a more robust way to reset the queue or use a fresh instance if tests interfere.
+        // For now, removing workers and re-configuring is a common pattern in this file.
+        Object.keys(queue.registeredWorkers).forEach(workerName => {
+            queue.removeWorker(workerName, true); // true to delete related jobs
+        });
+        queue.configure({}); // Reset to default configuration
+    });
+
+    afterEach(() => {
+        // Restore console.log after each test
+        consoleLogSpy.mockRestore();
+    });
+
+    it('should log when a job is added and debug is true', () => {
+        queue.configure({ debug: true });
+        queue.addWorker(new Worker('logTestWorker', async () => {}));
+        const jobId = queue.addJob('logTestWorker', { test: 'payload' });
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job added: ${jobId}`));
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`workerName: logTestWorker`));
+    });
+
+    it('should NOT log when a job is added and debug is false', () => {
+        queue.configure({ debug: false });
+        queue.addWorker(new Worker('logTestWorkerNoDebug', async () => {}));
+        queue.addJob('logTestWorkerNoDebug', { test: 'payload' });
+        expect(consoleLogSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT log when a job is added and debug is not set (default)', () => {
+        // queue.configure({}); // Default configuration done in beforeEach
+        queue.addWorker(new Worker('logTestWorkerDefault', async () => {}));
+        queue.addJob('logTestWorkerDefault', { test: 'payload' });
+        expect(consoleLogSpy).not.toHaveBeenCalled();
+    });
+
+    it('should log when a worker is added and debug is true', () => {
+        queue.configure({ debug: true });
+        queue.addWorker(new Worker('logTestWorkerAdd', async () => {}));
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Worker added: logTestWorkerAdd'));
+    });
+
+    it('should log when queue is started and debug is true', () => {
+        queue.configure({ debug: true });
+        queue.start();
+        expect(consoleLogSpy).toHaveBeenCalledWith('Queue started.');
+    });
+
+    it('should log when queue is stopped and debug is true', () => {
+        queue.configure({ debug: true });
+        queue.start(); // Start first, then stop
+        consoleLogSpy.mockClear(); // Clear logs from start
+        queue.stop();
+        expect(consoleLogSpy).toHaveBeenCalledWith('Queue stopped.');
+    });
+
+    it('should log job lifecycle events when debug is true', (done) => {
+        queue.configure({ debug: true });
+        const workerName = 'logLifecycleWorker';
+        const jobPayload = { message: 'run job' };
+        let jobId: string;
+
+        queue.addWorker(new Worker(workerName, async (payload) => {
+            // Simulate work
+            return new Promise(resolve => setTimeout(() => resolve(payload), 10));
+        }));
+
+        // Listen for job success to perform assertions
+        queue.on('jobSucceeded', (job) => {
+            if (job.id === jobId) {
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job started: ${jobId}`));
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`workerName: ${workerName}`));
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job succeeded: ${jobId}`));
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job completed: ${jobId}`));
+                done();
+            }
+        });
+        
+        jobId = queue.addJob(workerName, jobPayload);
+        // Logs from addJob and addWorker will also be present, which is fine.
+    });
+
+    it('should log job failure events when debug is true', (done) => {
+        queue.configure({ debug: true });
+        const workerName = 'logFailedJobWorker';
+        const jobPayload = { message: 'fail this job' };
+        let jobId: string;
+
+        queue.addWorker(new Worker(workerName, async (payload) => {
+            throw new Error('Simulated job failure');
+        }, {
+            // Suppress ExitWithCode:1 error in console by handling failure via event
+            onFailure: () => {} 
+        }));
+        
+        queue.on('jobFailed', (job, error) => {
+            if (job.id === jobId) {
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job started: ${jobId}`));
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job failed: ${jobId}`));
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Simulated job failure'));
+                expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Job completed: ${jobId}`));
+                done();
+            }
+        });
+
+        jobId = queue.addJob(workerName, jobPayload, { attempts: 1 }); // Ensure it fails definitively
+    });
+});

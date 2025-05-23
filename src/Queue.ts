@@ -88,6 +88,7 @@ export interface QueueEvents {
  * Options to configure the queue
  */
 export interface QueueOptions {
+    debug?: boolean; // Added this line
     /**
      * A callback function which is called after the queue has been stopped
      * @parameter executedJobs
@@ -153,6 +154,7 @@ export class Queue extends EventEmitter<QueueEvents> {
     private concurrency: number;
     private updateInterval: number;
     private onQueueFinish: (executedJobs: Array<Job<any>>) => void;
+    private debug: boolean; // Added this line
 
     private queuedJobExecuter: any[] = [];
     private runningJobPromises: { [key: string]: CancellablePromise<any> };
@@ -171,6 +173,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         this.updateInterval = 10;
         this.onQueueFinish = (executedJobs: Array<Job<any>>) => { };
         this.concurrency = -1;
+        this.debug = false; // Added this line
     }
 
 
@@ -201,7 +204,8 @@ export class Queue extends EventEmitter<QueueEvents> {
     async requeueJob(job: RawJob) {
         const newJob = { ...job, failed: '', status: "idle", active: FALSE } as RawJob;
         await this.jobStore.updateJob(newJob);
-        this.emit("jobRequeued", newJob)
+        this.emit("jobRequeued", newJob);
+        this._log(`Job requeued: ${newJob.id}`); // Added this line
         if (!this.isActive) {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore
@@ -218,10 +222,12 @@ export class Queue extends EventEmitter<QueueEvents> {
             onQueueFinish = (executedJobs: Array<Job<any>>) => { },
             updateInterval = 10,
             concurrency = -1,
+            debug = false, // Added this line for destructuring
         } = options;
         this.onQueueFinish = onQueueFinish;
         this.updateInterval = updateInterval;
         this.concurrency = concurrency;
+        this.debug = debug; // Added this line to set the property
     }
     /**
      * adds a [[Worker]] to the queue which can execute Jobs
@@ -233,6 +239,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         }
         this.workers[worker.name] = worker;
         this.emit('workerAdded', worker.name);
+        this._log(`Worker added: ${worker.name}`); // Added this line
     }
 
     /**
@@ -284,6 +291,7 @@ export class Queue extends EventEmitter<QueueEvents> {
 
         await this.jobStore.addJob(job);
         this.emit('jobAdded', job);
+        this._log(`Job added: ${job.id}, workerName: ${job.workerName}`); // Added this line
         if (startQueue && !this.isActive) {
             // this.start() is already async
             await this.start();
@@ -297,6 +305,7 @@ export class Queue extends EventEmitter<QueueEvents> {
     async start() {
         if (!this.isActive) {
             this.isActive = true;
+            this._log('Queue started.'); // Added this line
             this.executedJobs = [];
             await this.resetActiveJobs();
             this.scheduleQueue();
@@ -307,6 +316,7 @@ export class Queue extends EventEmitter<QueueEvents> {
      */
     stop() {
         this.isActive = false;
+        this._log('Queue stopped.'); // Added this line
     }
 
     /**
@@ -315,6 +325,7 @@ export class Queue extends EventEmitter<QueueEvents> {
     cancelJob(jobId: string, exception?: Error) {
         const promise = this.runningJobPromises[jobId];
         if (promise !== undefined && typeof promise[CANCEL] === 'function') {
+            this._log(`Cancelling job: ${jobId}`); // Added this line
             promise[CANCEL](exception || new QueueError(`job canceled`, "cancelled"));
         } else if (!promise[CANCEL]) {
             console.warn('Worker does not have a cancel method implemented');
@@ -329,6 +340,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
             const isRunning = this.runningJobPromises[job.id];
             if (!!Boolean(isRunning)) {
+                this._log(`Cancelling job from cancelAllActiveJobs: ${job.id}`); // Added this line
                 this.cancelJob(job.id, new QueueError(`Job with id ${job.id} cancelled`, "cancelled"));
             }
             await this.jobStore.updateJob(newJob as RawJob); // Added await
@@ -336,6 +348,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         }
     }
     async cancelActiveJob(job: RawJob) { // Made async
+        this._log(`Cancelling active job: ${job.id}`); // Added this line
         const newJob = { ...job, ...{ active: FALSE, status: "cancelled" } };
 
         const isRunning = this.runningJobPromises[job.id];
@@ -351,6 +364,13 @@ export class Queue extends EventEmitter<QueueEvents> {
     private resetActiveJob = async (job: RawJob) => { // Made async
         await this.jobStore.updateJob({ ...job, ...{ active: FALSE } }); // Added await
     };
+
+    // Add this method to the Queue class
+    private _log(message: string, ...optionalParams: any[]) {
+        if (this.debug) {
+            console.log(message, ...optionalParams);
+        }
+    }
     private async resetActiveJobs() {
         const activeMarkedJobs = await this.jobStore.getActiveMarkedJobs();
         // .map with async function returns array of Promises
@@ -396,7 +416,7 @@ export class Queue extends EventEmitter<QueueEvents> {
         executer: (rawJob: RawJob) => Promise<void>,
         resolve: (_: unknown) => void,
         rawJob: RawJob
-    ) => {
+    ) => {.
         if (this.isExecuterAvailable()) {
             await this.runExecuter(executer, resolve, rawJob);
         } else {
@@ -473,6 +493,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             // Ensure payload is stringified for updateJob
             await this.jobStore.updateJob({ ...job, payload: JSON.stringify(job.payload) }); // Added await
             this.emit('jobStarted', job);
+            this._log(`Job started: ${job.id}, workerName: ${job.workerName}`); // Added this line
 
             this.activeJobCount++;
             if (!this.workers[rawJob.workerName]) {
@@ -488,6 +509,7 @@ export class Queue extends EventEmitter<QueueEvents> {
             await this.jobStore.updateJob({ ...job, payload: JSON.stringify(job.payload) }); // Added await
             await this.jobStore.removeJob(rawJob); // This is a soft delete, added await
             this.emit('jobSucceeded', job);
+            this._log(`Job succeeded: ${job.id}`); // Added this line
         } catch (err) {
             const error = err as QueueError;
             const { attempts } = rawJob;
@@ -503,11 +525,13 @@ export class Queue extends EventEmitter<QueueEvents> {
             const failedJob = { ...rawJob, ...{ active: FALSE, metaData, failed, status: error.code === "cancelled" ? "cancelled" : "failed" } } as RawJob;
             await this.jobStore.updateJob(failedJob); // Added await
             this.emit('jobFailed', failedJob, error);
+            this._log(`Job failed: ${failedJob.id}, error:`, error); // Added this line
         } finally {
             delete this.runningJobPromises[job.id];
             worker.decreaseExecutionCount();
             worker.triggerCompletion(job);
             this.emit('jobCompleted', { ...job });
+            this._log(`Job completed: ${job.id}`); // Added this line
             this.executedJobs.push(rawJob);
             this.activeJobCount--;
         }
